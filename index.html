@@ -117,7 +117,7 @@ canvas {
 .solution { padding:16px 18px; border-top:1px solid var(--line); display:none; }
 .solution.show { display:block; }
 .solution h2 { margin:0 0 8px; font-size:17px; }
-.solution pre {
+.solution .solutionText {
   white-space:pre-wrap; margin:0; line-height:1.45; font-family:inherit; color:#1f2937;
 }
 .summary { display:none; padding:18px; }
@@ -188,7 +188,7 @@ canvas {
         </div>
         <div class="solution" id="solutionBox">
           <h2>Worked solution</h2>
-          <pre id="solution"></pre>
+          <div id="solution" class="solutionText"></div>
         </div>
       </div>
 
@@ -255,6 +255,43 @@ const $ = id => document.getElementById(id);
 function save(){ localStorage.setItem(key, JSON.stringify(state)); }
 function currentProblem(){ return problems.find(p => p.n === state.current) || problems[0]; }
 function gradeLabel(g){ return g === "good" ? "secure" : g === "mid" ? "shaky" : g === "bad" ? "missed" : ""; }
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  }[ch]));
+}
+function mathExpr(expr) {
+  return `$${expr}$`;
+}
+function latexifyExpression(expr) {
+  let out = expr.trim();
+  out = out.replace(/\bsqrt\(([^()]+)\)/g, "\\sqrt{$1}");
+  out = out.replace(/([A-Za-z0-9)\]}])\^-?(\d+)/g, (_, base, pow) => `${base}^{${pow}}`);
+  out = out.replace(/\+-/g, "-");
+  return out;
+}
+function formatMathText(raw) {
+  let text = escapeHTML(raw);
+  const replacements = [
+    [/(\d+)\s*\/\s*(\d+)/g, "\\frac{$1}{$2}"],
+    [/&lt;=/g, "\\le"],
+    [/&gt;=/g, "\\ge"],
+    [/-&gt;/g, "\\Rightarrow"],
+    [/±/g, "\\pm"],
+    [/sqrt\(([^()]+)\)/g, "\\sqrt{$1}"]
+  ];
+  for (const [pattern, repl] of replacements) text = text.replace(pattern, repl);
+  text = text.replace(/([A-Za-z0-9)\]}])\^-?(\d+)/g, (_, base, pow, offset, full) => {
+    const sign = full.slice(offset, offset + `${base}^-`.length).includes("^-") ? "-" : "";
+    return `${base}^{${sign}${pow}}`;
+  });
+  text = text.replace(/(\([^.\n]+?\)|[A-Za-z0-9\\{}^+\-*/= ]{2,})/g, match => {
+    const looksMathy = /\\sqrt|\\frac|\\le|\\ge|\\Rightarrow|[=^]|[A-Za-z]\s*[+\-*/]|\d\s*[+\-*/]\s*\d/.test(match);
+    if (!looksMathy) return match;
+    return mathExpr(latexifyExpression(match));
+  });
+  return text;
+}
 function isDiagnostic(p){ return diagnosticIds.includes(p.n); }
 function visibleProblems(){
   if (mode === "diagnostic") return problems.filter(isDiagnostic);
@@ -375,7 +412,7 @@ function renderProblem(){
   const p = currentProblem();
   $("chapter").textContent = p.ch;
   $("title").textContent = `Problem ${p.n}: ${p.name}`;
-  $("prompt").textContent = p.q;
+  $("prompt").innerHTML = formatMathText(p.q);
   $("attr").textContent = p.skill;
   const cluster = clusterFor(p);
   const weak = weakestCluster();
@@ -390,9 +427,9 @@ function renderProblem(){
   if (lesson) {
     $("lessonCard").innerHTML = `<b>Micro-lesson: ${weak?.name || cluster}</b><br>${lesson.teach}<br><br><b>Example move:</b> ${lesson.example}<br><br><b>Rebuild:</b> ${lesson.rebuild}`;
   }
-  $("solution").textContent = p.sol;
+  $("solution").innerHTML = formatMathText(p.sol);
   $("solutionBox").classList.remove("show");
-  if (window.MathJax) MathJax.typesetPromise?.();
+  if (window.MathJax) MathJax.typesetPromise?.([$("prompt"), $("solution")]);
 }
 
 function renderSummary(){
