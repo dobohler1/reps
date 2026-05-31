@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Adaptive Exam Mission Builder</title>
+<script>
+window.MathJax = { tex: { inlineMath: [["$", "$"], ["\\(", "\\)"]] }, svg: { fontCache: "global" } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root {
+  --ink:#111827; --muted:#667085; --line:#d9e1ee; --soft:#f5f7fb;
+  --blue:#2563eb; --blue2:#1d4ed8; --green:#15803d; --red:#b42318;
+  --gold:#b7791f; --card:#fff;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; }
+body {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  color:var(--ink); background:#eef2f7; -webkit-font-smoothing:antialiased;
+}
+button, input, select { font:inherit; }
+.app { min-height:100vh; display:grid; grid-template-columns:300px minmax(0,1fr); }
+.side {
+  background:#0f172a; color:#fff; padding:18px; position:sticky; top:0; height:100vh;
+  overflow:auto; border-right:1px solid rgba(255,255,255,.08);
+}
+.brand { font-weight:800; font-size:19px; letter-spacing:.01em; }
+.sub { color:#b8c3d6; margin:5px 0 16px; font-size:13px; line-height:1.35; }
+.statgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+.stat { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:10px; }
+.stat b { display:block; font-size:21px; }
+.stat span { color:#b8c3d6; font-size:12px; }
+.coachBox {
+  background:#172554; border:1px solid #2b54d6; padding:12px; border-radius:10px;
+  margin:12px 0 16px; line-height:1.35; font-size:13px;
+}
+.coachBox strong { color:#bfdbfe; display:block; margin-bottom:4px; }
+.plist { display:grid; gap:6px; }
+.pbtn {
+  width:100%; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.04);
+  color:#e5e7eb; border-radius:8px; padding:9px 10px; text-align:left; cursor:pointer;
+  display:grid; grid-template-columns:28px 1fr auto; gap:8px; align-items:center;
+}
+.pbtn.active { background:#2563eb; border-color:#60a5fa; }
+.pbtn.done.good { border-color:rgba(34,197,94,.7); }
+.pbtn.done.bad { border-color:rgba(248,113,113,.7); }
+.pnum { font-weight:800; color:#bfdbfe; }
+.ptitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+.badge { font-size:11px; color:#cbd5e1; }
+.main { padding:18px; min-width:0; }
+.topbar {
+  display:flex; gap:10px; justify-content:space-between; align-items:center;
+  margin-bottom:14px;
+}
+.seg { display:flex; background:#dfe6f2; padding:4px; border-radius:10px; gap:4px; }
+.seg button {
+  border:0; border-radius:8px; padding:8px 12px; color:#334155; background:transparent; cursor:pointer;
+}
+.seg button.on { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(15,23,42,.12); }
+.timer { color:#475467; font-weight:700; }
+.workbench {
+  display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:14px; align-items:start;
+}
+.panel {
+  background:var(--card); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 1px 3px rgba(15,23,42,.06);
+}
+.problem { padding:18px; }
+.chapter { color:var(--gold); font-weight:800; font-size:13px; text-transform:uppercase; }
+h1 { font-size:24px; margin:7px 0 10px; line-height:1.2; }
+.prompt { font-size:19px; line-height:1.5; }
+.attr {
+  margin-top:14px; padding:10px 12px; background:#f8fafc; border:1px solid var(--line);
+  border-radius:8px; color:#334155; font-size:14px;
+}
+.attr b { color:#1d4ed8; }
+.missionMove {
+  margin-top:12px; padding:12px; border-radius:8px; border:1px solid #bfdbfe;
+  background:#eff6ff; color:#1e3a8a; line-height:1.4; font-size:14px;
+}
+.missionMove b { display:block; margin-bottom:3px; }
+.lessonCard {
+  margin-top:12px; padding:12px; border-radius:8px; border:1px solid #fde68a;
+  background:#fffbeb; color:#78350f; line-height:1.4; font-size:14px;
+}
+.diagTag {
+  display:inline-block; margin-left:6px; padding:2px 6px; border-radius:999px;
+  background:#dbeafe; color:#1e40af; font-size:10px; font-weight:800;
+}
+.canvasPanel { padding:12px; }
+.canvasHead { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+.canvasHead b { font-size:15px; }
+.canvasBtns { display:flex; gap:8px; }
+.mini {
+  border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px 10px;
+  cursor:pointer; color:#334155;
+}
+canvas {
+  width:100%; height:430px; display:block; background:#fff; border:1px solid #cbd5e1;
+  border-radius:8px; touch-action:none;
+  background-image:linear-gradient(#f1f5f9 1px, transparent 1px);
+  background-size:100% 34px;
+}
+.actions {
+  display:flex; flex-wrap:wrap; gap:8px; padding:12px 18px 18px; border-top:1px solid var(--line);
+}
+.primary, .grade {
+  border:0; border-radius:9px; padding:11px 14px; font-weight:800; cursor:pointer;
+}
+.primary { background:var(--blue); color:white; }
+.primary:hover { background:var(--blue2); }
+.grade.good { background:#dcfce7; color:#166534; }
+.grade.mid { background:#fef3c7; color:#92400e; }
+.grade.bad { background:#fee2e2; color:#991b1b; }
+.solution { padding:16px 18px; border-top:1px solid var(--line); display:none; }
+.solution.show { display:block; }
+.solution h2 { margin:0 0 8px; font-size:17px; }
+.solution pre {
+  white-space:pre-wrap; margin:0; line-height:1.45; font-family:inherit; color:#1f2937;
+}
+.summary { display:none; padding:18px; }
+.summary.show { display:block; }
+.skillList { display:grid; gap:8px; margin-top:10px; }
+.skill {
+  display:flex; justify-content:space-between; gap:12px; border:1px solid var(--line);
+  background:#fff; border-radius:8px; padding:10px 12px;
+}
+.smallNote { color:var(--muted); font-size:13px; line-height:1.35; margin-top:10px; }
+@media (max-width: 980px) {
+  .app { grid-template-columns:1fr; }
+  .side { position:relative; height:auto; max-height:34vh; }
+  .workbench { grid-template-columns:1fr; }
+  canvas { height:380px; }
+}
+@media (max-width: 640px) {
+  .main { padding:10px; }
+  .topbar { align-items:flex-start; flex-direction:column; }
+  .prompt { font-size:17px; }
+  h1 { font-size:21px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">Adaptive Exam Mission</div>
+    <div class="sub">Teacher packet in, learning mission out. The packet defines the target; the coach chooses the fastest path.</div>
+    <div class="statgrid">
+      <div class="stat"><b id="doneStat">0/25</b><span>attempted</span></div>
+      <div class="stat"><b id="strongStat">0</b><span>secure</span></div>
+    </div>
+    <div class="coachBox">
+      <strong>Coach recommendation</strong>
+      <span id="coachText">Start with Problem 1. Mark each problem honestly after checking the solution.</span>
+    </div>
+    <div class="plist" id="problemList"></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="seg">
+        <button id="modePractice" class="on">Diagnostic</button>
+        <button id="modeReview">Teach weak spots</button>
+        <button id="modePacket">Full packet</button>
+        <button id="modeSummary">Summary</button>
+      </div>
+      <div class="timer" id="timer">00:00</div>
+    </div>
+
+    <section id="practiceView" class="workbench">
+      <div class="panel">
+        <div class="problem">
+          <div class="chapter" id="chapter"></div>
+          <h1 id="title"></h1>
+          <div class="prompt" id="prompt"></div>
+          <div class="attr"><b>Skill tested:</b> <span id="attr"></span></div>
+          <div class="missionMove" id="missionMove"></div>
+          <div class="lessonCard" id="lessonCard"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="showSolution">Show worked solution</button>
+          <button class="grade good" data-grade="good">I had it</button>
+          <button class="grade mid" data-grade="mid">Almost / unsure</button>
+          <button class="grade bad" data-grade="bad">Missed it</button>
+          <button class="mini" id="nextBtn">Next</button>
+        </div>
+        <div class="solution" id="solutionBox">
+          <h2>Worked solution</h2>
+          <pre id="solution"></pre>
+        </div>
+      </div>
+
+      <div class="panel canvasPanel">
+        <div class="canvasHead">
+          <b>Scratch work</b>
+          <div class="canvasBtns">
+            <button class="mini" id="clearCanvas">Clear</button>
+            <button class="mini" id="togglePen">Pen: thick</button>
+          </div>
+        </div>
+        <canvas id="workCanvas" width="900" height="1100"></canvas>
+        <div class="smallNote">Designed for Apple Pencil. Nothing leaves this page in the prototype; progress is stored in this browser.</div>
+      </div>
+    </section>
+
+    <section id="summaryView" class="panel summary">
+      <h1>Exam Readiness Snapshot</h1>
+      <div id="summaryText"></div>
+      <div class="skillList" id="skillList"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const problems = [
+{n:1, ch:"Ch 1 — Ratios & Unit Cost", name:"Unit cost", skill:"Unit rate / proportional reasoning: divide price by quantity, compare dollars per ounce.", q:"Foods Co sells a 32 oz container of French Vanilla ice cream for $4.56. They also sell a 20 oz container for $3.20. Which size is the better deal?", sol:"32 oz: 4.56 / 32 = 0.1425 dollars per oz.\n20 oz: 3.20 / 20 = 0.160 dollars per oz.\nSince 0.1425 < 0.160, the 32 oz container is cheaper per ounce.\nAnswer: 32 oz container."},
+{n:2, ch:"Ch 2 — Expressions", name:"Translate words", skill:"Translating words to algebra: sum, quotient, and grouping with parentheses.", q:"Write as an algebraic expression: One-fourth the sum of 10 and the quotient of a number x and 3.", sol:"The quotient of x and 3 is x/3.\nThe sum of 10 and that quotient is 10 + x/3.\nOne-fourth of the sum is (1/4)(10 + x/3)."},
+{n:3, ch:"Ch 2 — Number Sets", name:"Order real numbers", skill:"Classifying rationals vs. irrationals and ordering on a number line.", q:"Reorder from least to greatest, and identify the number type: -7.3, sqrt(32), 5 3/4, -6 4/7, 0.6, sqrt(17).", sol:"Approximate: sqrt(32) ≈ 5.657, 5 3/4 = 5.75, -6 4/7 ≈ -6.571, sqrt(17) ≈ 4.123.\nOrder: -7.3, -6 4/7, 0.6, sqrt(17), sqrt(32), 5 3/4.\n-7.3, -6 4/7, 0.6, 5 3/4 are rational. sqrt(17) and sqrt(32) are irrational."},
+{n:4, ch:"Ch 2 — Statistics", name:"Mean", skill:"Mean of a data set, including signed negative values.", q:"A stock trader's daily gains/losses Mon-Fri were -100, 350, -250, 500, 750. Find the mean.", sol:"Mean = (-100 + 350 - 250 + 500 + 750) / 5 = 1250 / 5 = 250."},
+{n:5, ch:"Ch 3 — Equations", name:"Proportion", skill:"Solving a proportion by cross-multiplication.", q:"Solve: (6 + a) / 60 = 15 / 90.", sol:"90(6+a) = 60(15)\n540 + 90a = 900\n90a = 360\na = 4."},
+{n:6, ch:"Ch 3 — Equations", name:"Identity equation", skill:"Solving multi-step linear equations; recognizing an identity.", q:"Solve: 2(h + 3) = (1/6)(12h + 36).", sol:"Left side: 2h + 6.\nRight side: (12h + 36)/6 = 2h + 6.\nBoth sides are identical, so every real number works.\nAnswer: all real numbers / infinitely many solutions."},
+{n:7, ch:"Ch 4 — Absolute Value", name:"Abs value inequality", skill:"Absolute-value inequality; dividing by a negative reverses the inequality; >= yields OR.", q:"Solve and graph: -3|4 - (2/5)x| <= -24.", sol:"Divide by -3 and flip the sign: |4 - (2/5)x| >= 8.\nCase 1: 4 - (2/5)x >= 8 -> x <= -10.\nCase 2: 4 - (2/5)x <= -8 -> x >= 30.\nAnswer: x <= -10 or x >= 30."},
+{n:8, ch:"Ch 4 — Absolute Value", name:"Abs value equation", skill:"Absolute-value equation: isolate the bars first, then split.", q:"Solve: (1/2)|2j + 3| - 4 = 10.", sol:"(1/2)|2j+3| = 14\n|2j+3| = 28\n2j+3 = 28 -> j = 12.5\n2j+3 = -28 -> j = -15.5"},
+{n:9, ch:"Ch 5 — Lines", name:"Line through two points", skill:"Slope from two points; point-slope to slope-intercept form.", q:"Write in slope-intercept form the line through (9,-12) and (-7,-2), then graph.", sol:"m = (-2 - (-12)) / (-7 - 9) = 10 / -16 = -5/8.\nUsing (-7,-2): y + 2 = (-5/8)(x + 7).\ny = (-5/8)x - 51/8."},
+{n:10, ch:"Ch 5 — Lines", name:"Point and slope", skill:"Graphing a line from a point and a slope.", q:"Graph the line through A(-7,-3) with slope -4/5.", sol:"Point-slope form: y + 3 = (-4/5)(x + 7).\nSlope-intercept: y = (-4/5)x - 43/5.\nPlot (-7,-3), then go down 4 and right 5 to (-2,-7), then draw the line."},
+{n:11, ch:"Ch 6 — Systems", name:"Substitution", skill:"Solving a 2 by 2 system by substitution.", q:"Solve by substitution: y + 4x = 8 and 5x + 2y = 13.", sol:"From y + 4x = 8, y = 8 - 4x.\nSubstitute: 5x + 2(8 - 4x) = 13.\n5x + 16 - 8x = 13 -> -3x = -3 -> x = 1.\ny = 8 - 4(1) = 4.\nAnswer: (1,4)."},
+{n:12, ch:"Ch 6 — Systems", name:"Elimination", skill:"Solving a 2 by 2 system by elimination.", q:"Solve by elimination: 2a + 9b = 0 and 3a + 5b = 17.", sol:"Multiply first equation by 3: 6a + 27b = 0.\nMultiply second equation by 2: 6a + 10b = 34.\nSubtract: 17b = -34 -> b = -2.\nThen 2a + 9(-2) = 0 -> a = 9.\nAnswer: (a,b) = (9,-2)."},
+{n:13, ch:"Ch 7 — Radicals", name:"Radical fraction", skill:"Simplifying a radical of a fraction; rationalizing the denominator.", q:"Simplify: sqrt(169/3).", sol:"sqrt(169/3) = sqrt(169) / sqrt(3) = 13/sqrt(3).\nRationalize: 13/sqrt(3) * sqrt(3)/sqrt(3) = 13sqrt(3)/3."},
+{n:14, ch:"Ch 7 — Exponents", name:"Negative exponents", skill:"Quotient rule and negative exponents.", q:"Simplify: (4x^-3 y^5) / (8x y^-2).", sol:"Coefficients: 4/8 = 1/2.\nx exponents: x^(-3-1) = x^-4.\ny exponents: y^(5 - (-2)) = y^7.\nSo (1/2)x^-4 y^7 = y^7 / (2x^4)."},
+{n:15, ch:"Ch 7 — Radicals", name:"Like radicals", skill:"Simplifying and combining like radicals.", q:"Simplify: 3sqrt(6) - 7sqrt(24).", sol:"sqrt(24) = sqrt(4*6) = 2sqrt(6).\n3sqrt(6) - 7(2sqrt(6)) = 3sqrt(6) - 14sqrt(6) = -11sqrt(6)."},
+{n:16, ch:"Ch 7 — Radicals", name:"Radical binomial", skill:"Squaring a binomial with radicals.", q:"Simplify: (sqrt(2) + 3sqrt(12))^2.", sol:"First simplify 3sqrt(12) = 3*2sqrt(3) = 6sqrt(3).\nSquare (sqrt(2) + 6sqrt(3)):\n(sqrt(2))^2 + 2(sqrt(2))(6sqrt(3)) + (6sqrt(3))^2\n= 2 + 12sqrt(6) + 108 = 110 + 12sqrt(6)."},
+{n:17, ch:"Ch 8 — Polynomials", name:"Multiply polynomials", skill:"Polynomial multiplication / extended distribution.", q:"Multiply: (b^2 + 7b - 3)(-b + 3).", sol:"Distribute every term:\n-b^3 + 3b^2 - 7b^2 + 21b + 3b - 9.\nCombine like terms: -b^3 - 4b^2 + 24b - 9."},
+{n:18, ch:"Ch 8 — Polynomials", name:"Divide by factoring", skill:"Polynomial division via factoring.", q:"Divide: (2x^2 + x - 15) ÷ (2x - 5).", sol:"Factor the numerator: 2x^2 + x - 15 = (2x - 5)(x + 3).\nCancel (2x - 5).\nAnswer: x + 3."},
+{n:19, ch:"Ch 8 — Polynomials", name:"Long division", skill:"Polynomial long division after ordering terms.", q:"Divide: (3z^2 + 8 - 10z) ÷ (z - 2).", sol:"First order terms: 3z^2 - 10z + 8.\nLong division by z - 2 gives quotient 3z - 4 and remainder 0.\nCheck: (z - 2)(3z - 4) = 3z^2 - 10z + 8.\nAnswer: 3z - 4."},
+{n:20, ch:"Ch 9 — Quadratics", name:"Perfect square quadratic", skill:"Solving a quadratic by factoring a perfect-square trinomial.", q:"Factor / solve: 4b^2 - 40b = -100.", sol:"Move all terms to one side: 4b^2 - 40b + 100 = 0.\nDivide by 4: b^2 - 10b + 25 = 0.\nFactor: (b - 5)^2 = 0.\nAnswer: b = 5."},
+{n:21, ch:"Ch 9 — Quadratics", name:"Vertical motion", skill:"Vertical-motion model: evaluating and solving a quadratic.", q:"h = -16t^2 + vt + s. A person on a 256 ft building releases a ball from the roof. Find (a) the height after 3 s, and (b) when the ball hits the ground.", sol:"Released means v = 0. Starting height s = 256.\nh = -16t^2 + 256.\n(a) At t = 3: h = -16(9) + 256 = 112 ft.\n(b) Ground means h = 0: 0 = -16t^2 + 256 -> t^2 = 16 -> t = 4 seconds. Reject negative time."},
+{n:22, ch:"Ch 10 — Quadratics", name:"Parabola features", skill:"Axis of symmetry, vertex, intercepts, and graphing a parabola.", q:"For y = x^2 - 6x + 11, find the axis of symmetry, the y-intercept or x-intercepts, and the vertex; then graph without a table.", sol:"Axis: x = -b/(2a) = -(-6)/(2*1) = 3.\nVertex: plug in x=3 -> y = 9 - 18 + 11 = 2, so (3,2).\nDiscriminant: 36 - 44 = -8, so no real x-intercepts.\ny-intercept: x=0 gives y=11, so (0,11). Mirror point is (6,11).\nOpens up."},
+{n:23, ch:"Ch 9 — Quadratics", name:"Square-root property", skill:"Solving a quadratic by the square-root property.", q:"Solve: -3(b - 4)^2 = -15.", sol:"Divide by -3: (b - 4)^2 = 5.\nTake square roots: b - 4 = ±sqrt(5).\nAnswer: b = 4 ± sqrt(5)."},
+{n:24, ch:"Word Problems", name:"Coin system", skill:"System of equations word problem: coin / mixture problem.", q:"Halim had 63 coins, all nickels and pennies, worth $1.23 total. How many of each coin?", sol:"Let n = nickels and p = pennies, using cents.\nn + p = 63.\n5n + p = 123.\nSubtract: 4n = 60 -> n = 15.\np = 63 - 15 = 48.\nAnswer: 15 nickels and 48 pennies."},
+{n:25, ch:"Word Problems", name:"Closing-distance rate", skill:"Closing-distance rate problem: combined speed of objects moving toward each other.", q:"A car leaves Berkeley at 9:00 am going 75 mph; at the same time a motorcyclist leaves Fresno going 90 mph. The cities are 180 mi apart. At what time do they pass?", sol:"Combined closing speed = 75 + 90 = 165 mph.\ntime = distance / rate = 180 / 165 = 12/11 ≈ 1.1 hours.\nThat is about 1 hour 5.5 minutes after 9:00 am.\nAnswer: about 10:05 am."}
+];
+
+const diagnosticIds = [1,3,7,9,11,14,17,20,22,25];
+const key = "adaptive_exam_mission_builder_v1";
+let state = JSON.parse(localStorage.getItem(key) || "{}");
+state.grades ||= {};
+state.current ||= 1;
+let mode = "diagnostic";
+let penThick = true;
+let started = Date.now();
+
+const $ = id => document.getElementById(id);
+function save(){ localStorage.setItem(key, JSON.stringify(state)); }
+function currentProblem(){ return problems.find(p => p.n === state.current) || problems[0]; }
+function gradeLabel(g){ return g === "good" ? "secure" : g === "mid" ? "shaky" : g === "bad" ? "missed" : ""; }
+function isDiagnostic(p){ return diagnosticIds.includes(p.n); }
+function visibleProblems(){
+  if (mode === "diagnostic") return problems.filter(isDiagnostic);
+  if (mode === "review") return weakProblems().length ? weakProblems() : problems.filter(isDiagnostic);
+  return problems;
+}
+function clusterFor(p){
+  const text = `${p.ch} ${p.name} ${p.skill}`.toLowerCase();
+  if (text.includes("word") || text.includes("rate") || text.includes("coin")) return "Word-problem modeling";
+  if (text.includes("quadratic") || text.includes("parabola") || text.includes("vertical")) return "Quadratics";
+  if (text.includes("polynomial")) return "Polynomial operations";
+  if (text.includes("radical") || text.includes("exponent")) return "Radicals and exponents";
+  if (text.includes("system") || text.includes("substitution") || text.includes("elimination")) return "Systems";
+  if (text.includes("line") || text.includes("slope") || text.includes("graph")) return "Linear graphs";
+  if (text.includes("absolute")) return "Absolute value";
+  if (text.includes("equation") || text.includes("proportion")) return "Equations and proportions";
+  return "Foundations";
+}
+function weakProblems(){
+  return problems.filter(p => state.grades[p.n] === "bad" || state.grades[p.n] === "mid");
+}
+function clusterStats(){
+  const stats = {};
+  for (const p of problems) {
+    const g = state.grades[p.n];
+    if (!g) continue;
+    const c = clusterFor(p);
+    stats[c] ||= {good:0, mid:0, bad:0, total:0, examples:[]};
+    stats[c][g]++;
+    stats[c].total++;
+    if (g !== "good") stats[c].examples.push(p);
+  }
+  return stats;
+}
+function weakestCluster(){
+  const stats = clusterStats();
+  return Object.entries(stats)
+    .map(([name,s]) => ({name, ...s, risk: s.bad * 2 + s.mid}))
+    .filter(s => s.risk > 0)
+    .sort((a,b) => b.risk - a.risk || b.total - a.total)[0] || null;
+}
+const lessons = {
+  "Foundations": {
+    teach:"Slow down on representation: convert every value into a comparable form before ordering or classifying.",
+    example:"For mixed numbers, radicals, and decimals, approximate only as much as needed to place them on the number line.",
+    rebuild:"Do 2 ordering problems with radicals, then one classification-only problem."
+  },
+  "Absolute value": {
+    teach:"Absolute value splits only after the bars are isolated. For inequalities, remember: greater-than absolute value becomes OR.",
+    example:"|u| >= 8 means u >= 8 OR u <= -8. If you divide by a negative before that, flip the inequality first.",
+    rebuild:"Practice one equation, one less-than inequality, and one greater-than inequality."
+  },
+  "Linear graphs": {
+    teach:"A line problem is usually asking for two things: rate of change and anchor point. Find slope, then use one point.",
+    example:"From two points, m = change in y / change in x. Then use y-y1=m(x-x1).",
+    rebuild:"Do one slope-from-two-points problem, then one point-plus-slope graph."
+  },
+  "Systems": {
+    teach:"Systems are about making one variable disappear. Substitution isolates first; elimination matches coefficients first.",
+    example:"If y = 8 - 4x, substitution is natural. If both equations have a and b, scale to match a coefficient.",
+    rebuild:"Do one substitution setup and one elimination setup before solving fully."
+  },
+  "Radicals and exponents": {
+    teach:"Keep two rules separate: roots simplify by square factors; exponents divide by subtracting powers. Negative exponents move, they do not make numbers negative.",
+    example:"x^-4 = 1/x^4. sqrt(24)=2sqrt(6). These are different moves.",
+    rebuild:"Do two negative-exponent simplifications and two radical simplifications."
+  },
+  "Polynomial operations": {
+    teach:"Polynomial operations are bookkeeping. Align like terms, distribute every term, and reorder before division.",
+    example:"For (a+b)(c+d), every term in the first factor hits every term in the second.",
+    rebuild:"Do one multiply, one factor-and-cancel division, and one ordered long division."
+  },
+  "Quadratics": {
+    teach:"First identify the quadratic form: factor, square-root property, vertical motion, or graph features. Do not use one method for all of them.",
+    example:"(b-4)^2=5 calls for square roots; x^2-6x+11 calls for axis/vertex; h=-16t^2+s calls for evaluating or setting h=0.",
+    rebuild:"Sort 4 quadratic problems by method before solving any of them."
+  },
+  "Word-problem modeling": {
+    teach:"Before solving, name quantities and units. Most mistakes happen before the algebra starts.",
+    example:"Coins: count equation plus value equation. Closing distance: add speeds when objects move toward each other.",
+    rebuild:"Write equations for two word problems without solving, then solve one."
+  }
+};
+
+function renderList(){
+  const list = $("problemList");
+  list.innerHTML = problems.map(p => {
+    const g = state.grades[p.n];
+    const hidden = !visibleProblems().some(v => v.n === p.n);
+    const cls = ["pbtn", p.n === state.current ? "active" : "", g ? "done" : "", g === "good" ? "good" : (g ? "bad" : "")].join(" ");
+    return `<button class="${cls}" data-n="${p.n}" style="${hidden ? 'opacity:.42' : ''}">
+      <span class="pnum">${p.n}</span><span class="ptitle">${p.name}${isDiagnostic(p) ? '<span class="diagTag">diagnostic</span>' : ''}</span><span class="badge">${gradeLabel(g)}</span>
+    </button>`;
+  }).join("");
+  list.querySelectorAll("button").forEach(b => b.onclick = () => { state.current = Number(b.dataset.n); save(); render(); });
+}
+
+function coachRecommendation(){
+  const nextDiag = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
+  const weak = weakestCluster();
+  if (mode === "diagnostic" && nextDiag) return `Run diagnostic Problem ${nextDiag.n}: ${nextDiag.name}. Do not teach yet; collect signal first.`;
+  if (weak) {
+    return `Next agent move: teach ${weak.name}. Evidence: ${weak.mid + weak.bad} shaky/missed item(s). Then rebuild and retest.`;
+  }
+  const nextUnseen = problems.find(p => !state.grades[p.n]);
+  if (nextUnseen) return `Diagnostic looks clean so far. Sample the full packet next, starting with Problem ${nextUnseen.n}.`;
+  return "Clean mission. Schedule a short mixed retention check tomorrow.";
+}
+
+function renderStats(){
+  const grades = Object.values(state.grades);
+  $("doneStat").textContent = `${grades.length}/25`;
+  $("strongStat").textContent = grades.filter(g => g === "good").length;
+  $("coachText").textContent = coachRecommendation();
+}
+
+function renderProblem(){
+  const p = currentProblem();
+  $("chapter").textContent = p.ch;
+  $("title").textContent = `Problem ${p.n}: ${p.name}`;
+  $("prompt").textContent = p.q;
+  $("attr").textContent = p.skill;
+  const cluster = clusterFor(p);
+  const weak = weakestCluster();
+  const move = mode === "diagnostic"
+    ? "This is a diagnostic item. The goal is not to finish the packet; it is to reveal whether this skill needs teaching."
+    : mode === "review"
+      ? "This is a reteach/rebuild item selected because the skill cluster showed weakness."
+      : "This is a source-packet item. Use it only after the diagnostic and reteach loop.";
+  $("missionMove").innerHTML = `<b>Agent policy: ${cluster}</b>${move}`;
+  const lesson = lessons[weak?.name || cluster];
+  $("lessonCard").style.display = mode === "review" && lesson ? "block" : "none";
+  if (lesson) {
+    $("lessonCard").innerHTML = `<b>Micro-lesson: ${weak?.name || cluster}</b><br>${lesson.teach}<br><br><b>Example move:</b> ${lesson.example}<br><br><b>Rebuild:</b> ${lesson.rebuild}`;
+  }
+  $("solution").textContent = p.sol;
+  $("solutionBox").classList.remove("show");
+  if (window.MathJax) MathJax.typesetPromise?.();
+}
+
+function renderSummary(){
+  const grades = Object.values(state.grades);
+  const good = grades.filter(g => g === "good").length;
+  const mid = grades.filter(g => g === "mid").length;
+  const bad = grades.filter(g => g === "bad").length;
+  const diagDone = diagnosticIds.filter(n => state.grades[n]).length;
+  const weak = weakestCluster();
+  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${25 - grades.length}</b> not attempted.</p>
+    <p><b>Diagnostic pass:</b> ${diagDone}/${diagnosticIds.length} complete.</p>
+    <p><b>Recommended next action:</b> ${weak ? `Teach ${weak.name}, then rebuild and retest.` : "Continue diagnostic sampling or run a mixed retention check."}</p>`;
+  const stats = Object.entries(clusterStats())
+    .map(([name,s]) => ({name, ...s, risk:s.bad*2+s.mid}))
+    .sort((a,b) => b.risk - a.risk || a.name.localeCompare(b.name));
+  $("skillList").innerHTML = stats.length ? stats.map(s => {
+    const status = s.risk === 0 ? "secure" : s.bad ? "teach now" : "rebuild";
+    return `<div class="skill"><span><b>${s.name}</b><br>${s.good} secure · ${s.mid} shaky · ${s.bad} missed</span><span>${status}</span></div>`;
+  }).join("") : `<p>No diagnostic data yet. Start with the diagnostic pass.</p>`;
+}
+
+function renderModeButtons(){
+  $("modePractice").classList.toggle("on", mode === "diagnostic");
+  $("modeReview").classList.toggle("on", mode === "review");
+  $("modePacket").classList.toggle("on", mode === "packet");
+  $("modeSummary").classList.toggle("on", mode === "summary");
+  $("practiceView").style.display = mode === "summary" ? "none" : "grid";
+  $("summaryView").classList.toggle("show", mode === "summary");
+}
+
+function render(){
+  renderModeButtons();
+  renderList();
+  renderStats();
+  if (mode === "summary") renderSummary();
+  else renderProblem();
+}
+
+function goNext(){
+  if (mode === "diagnostic") {
+    const diag = problems.filter(isDiagnostic);
+    const next = diag.find(p => !state.grades[p.n]);
+    state.current = next?.n || diag[(diag.findIndex(p => p.n === state.current) + 1) % diag.length].n;
+  } else if (mode === "review") {
+    const weak = weakProblems();
+    const idx = weak.findIndex(p => p.n === state.current);
+    state.current = weak[(idx + 1) % weak.length]?.n || state.current;
+  } else {
+    state.current = state.current >= 25 ? 1 : state.current + 1;
+  }
+  save();
+  clearCanvas();
+  render();
+}
+
+$("showSolution").onclick = () => $("solutionBox").classList.add("show");
+$("nextBtn").onclick = goNext;
+document.querySelectorAll(".grade").forEach(b => b.onclick = () => {
+  state.grades[state.current] = b.dataset.grade;
+  save();
+  render();
+});
+$("modePractice").onclick = () => {
+  mode = "diagnostic";
+  const next = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
+  if (next) state.current = next.n;
+  render();
+};
+$("modeReview").onclick = () => {
+  mode = "review";
+  const weak = weakProblems()[0];
+  if (weak) state.current = weak.n;
+  save(); render();
+};
+$("modePacket").onclick = () => { mode = "packet"; render(); };
+$("modeSummary").onclick = () => { mode = "summary"; render(); };
+
+const canvas = $("workCanvas");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+let last = null;
+function pos(e){
+  const r = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x:(t.clientX - r.left) * canvas.width / r.width, y:(t.clientY - r.top) * canvas.height / r.height };
+}
+function startDraw(e){ drawing = true; last = pos(e); e.preventDefault(); }
+function moveDraw(e){
+  if (!drawing) return;
+  const p = pos(e);
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111827"; ctx.lineWidth = penThick ? 5 : 2;
+  ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+  last = p; e.preventDefault();
+}
+function endDraw(){ drawing = false; last = null; }
+function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); }
+canvas.addEventListener("pointerdown", startDraw);
+canvas.addEventListener("pointermove", moveDraw);
+canvas.addEventListener("pointerup", endDraw);
+canvas.addEventListener("pointercancel", endDraw);
+$("clearCanvas").onclick = clearCanvas;
+$("togglePen").onclick = () => { penThick = !penThick; $("togglePen").textContent = `Pen: ${penThick ? "thick" : "thin"}`; };
+
+setInterval(() => {
+  const secs = Math.floor((Date.now() - started) / 1000);
+  $("timer").textContent = `${String(Math.floor(secs/60)).padStart(2,"0")}:${String(secs%60).padStart(2,"0")}`;
+}, 1000);
+
+render();
+</script>
+</body>
+</html>
