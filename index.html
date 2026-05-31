@@ -510,26 +510,72 @@ $("modeSummary").onclick = () => { mode = "summary"; render(); };
 const canvas = $("workCanvas");
 const ctx = canvas.getContext("2d");
 let drawing = false;
-let last = null;
+let strokePoints = [];
 function pos(e){
   const r = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
   return { x:(t.clientX - r.left) * canvas.width / r.width, y:(t.clientY - r.top) * canvas.height / r.height };
 }
-function startDraw(e){ drawing = true; last = pos(e); e.preventDefault(); }
+function setupPen() {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = penThick ? 5 : 2;
+}
+function drawSmoothPoint(p) {
+  strokePoints.push(p);
+  setupPen();
+  if (strokePoints.length === 1) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#111827";
+    ctx.fill();
+    return;
+  }
+  if (strokePoints.length === 2) {
+    const a = strokePoints[0];
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    return;
+  }
+  const a = strokePoints[strokePoints.length - 3];
+  const b = strokePoints[strokePoints.length - 2];
+  const c = strokePoints[strokePoints.length - 1];
+  const midBC = { x:(b.x + c.x) / 2, y:(b.y + c.y) / 2 };
+  ctx.beginPath();
+  ctx.moveTo((a.x + b.x) / 2, (a.y + b.y) / 2);
+  ctx.quadraticCurveTo(b.x, b.y, midBC.x, midBC.y);
+  ctx.stroke();
+}
+function eventPoints(e) {
+  const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [e];
+  return events.map(pos);
+}
+function startDraw(e){
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  canvas.setPointerCapture?.(e.pointerId);
+  drawing = true;
+  strokePoints = [];
+  eventPoints(e).forEach(drawSmoothPoint);
+  e.preventDefault();
+}
 function moveDraw(e){
   if (!drawing) return;
-  const p = pos(e);
-  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111827"; ctx.lineWidth = penThick ? 5 : 2;
-  ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-  last = p; e.preventDefault();
+  eventPoints(e).forEach(drawSmoothPoint);
+  e.preventDefault();
 }
-function endDraw(){ drawing = false; last = null; }
+function endDraw(e){
+  if (drawing && e) eventPoints(e).forEach(drawSmoothPoint);
+  drawing = false;
+  strokePoints = [];
+}
 function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); }
-canvas.addEventListener("pointerdown", startDraw);
-canvas.addEventListener("pointermove", moveDraw);
-canvas.addEventListener("pointerup", endDraw);
-canvas.addEventListener("pointercancel", endDraw);
+canvas.addEventListener("pointerdown", startDraw, { passive:false });
+canvas.addEventListener("pointermove", moveDraw, { passive:false });
+canvas.addEventListener("pointerup", endDraw, { passive:false });
+canvas.addEventListener("pointercancel", endDraw, { passive:false });
 $("clearCanvas").onclick = clearCanvas;
 $("togglePen").onclick = () => { penThick = !penThick; $("togglePen").textContent = `Pen: ${penThick ? "thick" : "thin"}`; };
 
