@@ -65,6 +65,11 @@ button, input, select { font:inherit; -webkit-user-select:none; user-select:none
 }
 .seg button.on { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(15,23,42,.12); }
 .timer { color:#475467; font-weight:700; }
+.buildInfo {
+  color:#475467; font-weight:800; font-size:12px; background:#fff;
+  border:1px solid var(--line); border-radius:999px; padding:7px 10px;
+}
+.topMeta { display:flex; align-items:center; gap:8px; }
 .workbench {
   display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:14px; align-items:start;
 }
@@ -172,7 +177,10 @@ canvas {
         <button id="modePacket">Full packet</button>
         <button id="modeSummary">Summary</button>
       </div>
-      <div class="timer" id="timer">00:00</div>
+      <div class="topMeta">
+        <div class="buildInfo" id="buildInfo">v2026.05.31.5</div>
+        <div class="timer" id="timer">00:00</div>
+      </div>
     </div>
 
     <section id="practiceView" class="workbench">
