@@ -27,11 +27,24 @@ body {
 }
 button, input, select { font:inherit; -webkit-user-select:none; user-select:none; }
 .app { min-height:100vh; display:grid; grid-template-columns:300px minmax(0,1fr); }
+.app.workFocus { grid-template-columns:1fr; }
+.app.workFocus .side { display:none; }
+.app.workFocus .main { padding:10px; }
+.app.workFocus .workbench {
+  grid-template-columns:minmax(300px,.62fr) minmax(560px,1.38fr);
+  gap:10px;
+}
+.app.workFocus canvas { height:calc(100vh - 145px); min-height:620px; }
+.app.workFocus .problem { padding:14px; }
 .side {
   background:#0f172a; color:#fff; padding:18px; position:sticky; top:0; height:100vh;
   overflow:auto; border-right:1px solid rgba(255,255,255,.08);
 }
-.brand { font-weight:800; font-size:19px; letter-spacing:.01em; }
+.brand {
+  width:100%; border:0; background:transparent; color:#fff; padding:0; text-align:left;
+  font-weight:800; font-size:19px; letter-spacing:.01em; cursor:pointer;
+}
+.brandHint { display:block; color:#93a4bd; font-size:11px; font-weight:600; margin-top:2px; }
 .sub { color:#b8c3d6; margin:5px 0 16px; font-size:13px; line-height:1.35; }
 .statgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
 .stat { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:10px; }
@@ -70,8 +83,12 @@ button, input, select { font:inherit; -webkit-user-select:none; user-select:none
   border:1px solid var(--line); border-radius:999px; padding:7px 10px;
 }
 .topMeta { display:flex; align-items:center; gap:8px; }
+.focusBtn {
+  border:1px solid var(--line); background:#fff; color:#334155; border-radius:999px;
+  padding:7px 10px; font-size:12px; font-weight:800; cursor:pointer;
+}
 .workbench {
-  display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:14px; align-items:start;
+  display:grid; grid-template-columns:minmax(340px,.8fr) minmax(560px,1.2fr); gap:14px; align-items:start;
 }
 .panel {
   background:var(--card); border:1px solid var(--line); border-radius:10px;
@@ -108,7 +125,7 @@ h1 { font-size:24px; margin:7px 0 10px; line-height:1.2; }
   cursor:pointer; color:#334155;
 }
 canvas {
-  width:100%; height:430px; display:block; background:#fff; border:1px solid #cbd5e1;
+  width:100%; height:min(68vh,720px); min-height:560px; display:block; background:#fff; border:1px solid #cbd5e1;
   border-radius:8px; touch-action:none; -webkit-touch-callout:none;
   -webkit-user-select:none; user-select:none;
   background-image:linear-gradient(#f1f5f9 1px, transparent 1px);
@@ -143,7 +160,9 @@ canvas {
   .app { grid-template-columns:1fr; }
   .side { position:relative; height:auto; max-height:34vh; }
   .workbench { grid-template-columns:1fr; }
-  canvas { height:380px; }
+  canvas { height:56vh; min-height:520px; }
+  .app.workFocus .workbench { grid-template-columns:1fr; }
+  .app.workFocus canvas { height:calc(100vh - 135px); min-height:640px; }
 }
 @media (max-width: 640px) {
   .main { padding:10px; }
@@ -156,7 +175,7 @@ canvas {
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand">Adaptive Exam Mission</div>
+    <button class="brand" id="brandFocus">Adaptive Exam Mission<span class="brandHint">Tap for big writing area</span></button>
     <div class="sub">Teacher packet in, learning mission out. The packet defines the target; the coach chooses the fastest path.</div>
     <div class="statgrid">
       <div class="stat"><b id="doneStat">0/25</b><span>attempted</span></div>
@@ -178,7 +197,8 @@ canvas {
         <button id="modeSummary">Summary</button>
       </div>
       <div class="topMeta">
-        <div class="buildInfo" id="buildInfo">v2026.05.31.5</div>
+        <button class="focusBtn" id="focusBtn">Big work area</button>
+        <div class="buildInfo" id="buildInfo">v2026.05.31.6</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -261,6 +281,7 @@ const key = "adaptive_exam_mission_builder_v1";
 let state = JSON.parse(localStorage.getItem(key) || "{}");
 state.grades ||= {};
 state.current ||= 1;
+state.focusWork ||= false;
 let mode = "diagnostic";
 let penThick = true;
 let started = Date.now();
@@ -475,6 +496,8 @@ function renderModeButtons(){
 }
 
 function render(){
+  document.querySelector(".app").classList.toggle("workFocus", !!state.focusWork);
+  $("focusBtn").textContent = state.focusWork ? "Exit big work" : "Big work area";
   renderModeButtons();
   renderList();
   renderStats();
@@ -520,6 +543,8 @@ $("modeReview").onclick = () => {
 };
 $("modePacket").onclick = () => { mode = "packet"; render(); };
 $("modeSummary").onclick = () => { mode = "summary"; render(); };
+$("brandFocus").onclick = () => { state.focusWork = true; save(); render(); };
+$("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); render(); };
 
 const canvas = $("workCanvas");
 const ctx = canvas.getContext("2d");
