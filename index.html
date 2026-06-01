@@ -112,6 +112,16 @@ h1 { font-size:24px; margin:7px 0 10px; line-height:1.2; }
   margin-top:12px; padding:12px; border-radius:8px; border:1px solid #fde68a;
   background:#fffbeb; color:#78350f; line-height:1.4; font-size:14px;
 }
+.aiCard {
+  display:none; margin-top:12px; padding:14px; border-radius:10px;
+  border:1px solid #c7d2fe; background:#eef2ff; color:#312e81; line-height:1.45; font-size:14px;
+}
+.aiCard .aiHead { display:flex; align-items:center; gap:6px; font-weight:800; color:#3730a3; margin-bottom:6px; }
+.aiCard .miscon { font-weight:800; color:#1e3a8a; }
+.aiCard .hint { margin-top:8px; padding:10px; background:#fff; border:1px solid #c7d2fe; border-radius:8px; }
+.aiCard .tryRep { margin-top:8px; font-style:italic; color:#4338ca; }
+.aiCard .aiMeta { margin-top:8px; font-size:11.5px; color:#6366f1; }
+.aiCard.err { background:#fffbeb; border-color:#fde68a; color:#78350f; }
 .diagTag {
   display:inline-block; margin-left:6px; padding:2px 6px; border-radius:999px;
   background:#dbeafe; color:#1e40af; font-size:10px; font-weight:800;
@@ -198,7 +208,7 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.05.31.7</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.01.1 · AI coach</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -212,6 +222,7 @@ canvas {
           <div class="attr"><b>Skill tested:</b> <span id="attr"></span></div>
           <div class="missionMove" id="missionMove"></div>
           <div class="lessonCard" id="lessonCard"></div>
+          <div class="aiCard" id="aiCard"></div>
         </div>
         <div class="actions">
           <button class="primary" id="showSolution">Show worked solution</button>
@@ -287,6 +298,71 @@ let penThick = true;
 let started = Date.now();
 const $ = id => document.getElementById(id);
 function save(){ localStorage.setItem(key, JSON.stringify(state)); }
+
+// --- Rep AI coach (Supabase Edge Function vision proxy) ---------------------
+// The Anthropic key lives ONLY server-side in the function. The anon key below
+// is a Supabase publishable key — safe to ship in client code.
+const SUPABASE_FN_URL = "https://flmtmihxpkcxvrasyyxt.supabase.co/functions/v1/analyze-work";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbXRtaWh4cGtjeHZyYXN5eXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MDQyNjksImV4cCI6MjA5NDM4MDI2OX0.osZWn5j7gzSJlUxr9xbpseDkxq5TDTUnj-pjVTFPEDw";
+const diagnoses = {}; // in-memory per-problem: "loading" | {…diagnosis} | {error} | {noInk}
+
+function captureCanvasPNG(){
+  const tmp = document.createElement("canvas");
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const t = tmp.getContext("2d");
+  t.fillStyle = "#fff"; t.fillRect(0,0,tmp.width,tmp.height);
+  t.drawImage(canvas,0,0);
+  return tmp.toDataURL("image/png");
+}
+function hasInk(){
+  try {
+    const d = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    for (let i=3;i<d.length;i+=4){ if (d[i] > 10) return true; }
+    return false;
+  } catch(e){ return true; }
+}
+async function callDiagnose(p, grade, img){
+  const r = await fetch(SUPABASE_FN_URL, {
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
+    body: JSON.stringify({ image:img, problem:p.q, skill:p.skill, solution:p.sol, selfGrade:grade })
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "no result");
+  return j;
+}
+function renderAICard(p){
+  const card = $("aiCard");
+  const d = diagnoses[p.n];
+  card.classList.remove("err");
+  if (!d){ card.style.display="none"; card.innerHTML=""; return; }
+  card.style.display="block";
+  if (d === "loading"){
+    card.innerHTML = `<div class="aiHead">🔎 Coach is reading your work…</div><div>Looking at what you wrote on the canvas.</div>`;
+    return;
+  }
+  if (d.noInk){
+    card.innerHTML = `<div class="aiHead">✍️ Show your work first</div><div>Write your steps on the scratch canvas, then tap your grade again — the coach reads what you actually wrote.</div>`;
+    return;
+  }
+  if (d.error){
+    card.classList.add("err");
+    const lesson = lessons[clusterFor(p)];
+    card.innerHTML = `<div class="aiHead">🧭 Offline coach</div>` + (lesson
+      ? `${lesson.teach}<br><br><b>Try:</b> ${lesson.example}`
+      : `Couldn't reach the live coach right now. Re-read the worked solution, then try a similar problem.`);
+    return;
+  }
+  const conf = d.confidence
+    ? `<div class="aiMeta">confidence: ${d.confidence}${d.work_visible===false?" · couldn't read clear work — hint is from the problem":""}</div>` : "";
+  card.innerHTML = `
+    <div class="aiHead">🔎 Coach read your work</div>
+    <div><span class="miscon">${escapeHTML(d.misconception||"")}</span> — ${escapeHTML(d.explanation||"")}</div>
+    <div class="hint"><b>Try this:</b> ${escapeHTML(d.coaching_hint||"")}</div>
+    ${d.try_representation ? `<div class="tryRep">Another way to see it: ${escapeHTML(d.try_representation)}</div>` : ""}
+    ${conf}`;
+  if (window.MathJax) MathJax.typesetPromise?.([card]);
+}
 function currentProblem(){ return problems.find(p => p.n === state.current) || problems[0]; }
 function gradeLabel(g){ return g === "good" ? "secure" : g === "mid" ? "shaky" : g === "bad" ? "missed" : ""; }
 function escapeHTML(s) {
@@ -434,6 +510,7 @@ function renderProblem(){
   }
   $("solution").innerHTML = formatMathText(p.sol);
   $("solutionBox").classList.remove("show");
+  renderAICard(p);
   if (window.MathJax) MathJax.typesetPromise?.([$("prompt"), $("solution")]);
 }
 
@@ -494,9 +571,22 @@ function goNext(){
 
 $("showSolution").onclick = () => $("solutionBox").classList.add("show");
 $("nextBtn").onclick = goNext;
-document.querySelectorAll(".grade").forEach(b => b.onclick = () => {
-  state.grades[state.current] = b.dataset.grade;
+document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
+  const g = b.dataset.grade;
+  const p = currentProblem();
+  state.grades[p.n] = g;
   save();
+  // AI coach fires only on shaky/missed — the metered, wrong-answer path.
+  if (g === "good") { delete diagnoses[p.n]; render(); return; }
+  if (!hasInk()) { diagnoses[p.n] = { noInk:true }; render(); return; }
+  diagnoses[p.n] = "loading";
+  render();
+  const img = captureCanvasPNG();
+  try {
+    diagnoses[p.n] = await callDiagnose(p, g, img);
+  } catch (e) {
+    diagnoses[p.n] = { error:true };
+  }
   render();
 });
 $("modePractice").onclick = () => {
