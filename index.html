@@ -123,6 +123,14 @@ h1 { font-size:24px; margin:7px 0 10px; line-height:1.2; }
 .aiCard .tryRep { margin-top:8px; font-style:italic; color:#4338ca; }
 .aiCard .aiMeta { margin-top:8px; font-size:11.5px; color:#6366f1; }
 .aiCard.err { background:#fffbeb; border-color:#fde68a; color:#78350f; }
+.aiCard.ok { background:#ecfdf5; border-color:#6ee7b7; color:#065f46; }
+.aiCard .practiceBtn { margin-top:12px; }
+.retestBanner {
+  margin:0 0 12px; padding:8px 12px; border-radius:8px; font-size:13px; font-weight:700;
+  background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe;
+  display:flex; gap:10px; align-items:center; justify-content:space-between;
+}
+.retestBanner .pips { letter-spacing:2px; }
 .diagTag {
   display:inline-block; margin-left:6px; padding:2px 6px; border-radius:999px;
   background:#dbeafe; color:#1e40af; font-size:10px; font-weight:800;
@@ -209,7 +217,7 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.01.1 · AI coach</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.01.2 · self-healing loop</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -217,6 +225,7 @@ canvas {
     <section id="practiceView" class="workbench">
       <div class="panel">
         <div class="problem">
+          <div class="retestBanner" id="retestBanner" style="display:none"></div>
           <div class="chapter" id="chapter"></div>
           <h1 id="title"></h1>
           <div class="prompt" id="prompt"></div>
@@ -231,6 +240,9 @@ canvas {
           <button class="grade mid" data-grade="mid">Almost / unsure</button>
           <button class="grade bad" data-grade="bad">Missed it</button>
           <button class="mini" id="nextBtn">Next</button>
+          <button class="primary" id="checkBtn" style="display:none">Check my work</button>
+          <button class="mini" id="nextRetestBtn" style="display:none">Next practice problem</button>
+          <button class="mini" id="exitRetestBtn" style="display:none">Exit practice</button>
         </div>
         <div class="solution" id="solutionBox">
           <h2>Worked solution</h2>
@@ -356,13 +368,147 @@ function renderAICard(p){
   }
   const conf = d.confidence
     ? `<div class="aiMeta">confidence: ${d.confidence}${d.work_visible===false?" · couldn't read clear work — hint is from the problem":""}</div>` : "";
+  const canPractice = d.misconception && d.misconception.toLowerCase() !== "none";
   card.innerHTML = `
     <div class="aiHead">🔎 Coach read your work</div>
     <div><span class="miscon">${escapeHTML(d.misconception||"")}</span> — ${escapeHTML(d.explanation||"")}</div>
     <div class="hint"><b>Try this:</b> ${escapeHTML(d.coaching_hint||"")}</div>
     ${d.try_representation ? `<div class="tryRep">Another way to see it: ${escapeHTML(d.try_representation)}</div>` : ""}
-    ${conf}`;
+    ${conf}
+    ${canPractice ? `<button class="primary practiceBtn" id="practiceBtn">Practice this skill until it sticks →</button>` : ""}`;
+  const pb = $("practiceBtn");
+  if (pb) pb.onclick = () => startRetest(p, d);
   if (window.MathJax) MathJax.typesetPromise?.([card]);
+}
+
+// --- Rep self-healing re-test loop -----------------------------------------
+const GEN_URL = "https://flmtmihxpkcxvrasyyxt.supabase.co/functions/v1/generate-retest";
+const HDRS = { "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" };
+const RETEST_MAX = 4;       // attempts before escalating to a human
+let retest = null;          // { skill, misconception, sourceN, problem, sol, attempts, streak, phase, ... }
+
+function startRetest(p, diag){
+  retest = {
+    skill: (diag && diag.skill) || p.skill,
+    misconception: (diag && diag.misconception) || "",
+    sourceProblem: p.q, sourceN: p.n,
+    attempts: 0, streak: 0, phase: "working",
+    problem: null, sol: null, lastResult: null, lastCorrect: false,
+    mastered: false, escalated: false, genError: false
+  };
+  nextRetestProblem();
+}
+
+async function nextRetestProblem(){
+  retest.phase = "working"; retest.lastResult = null;
+  retest.problem = null; retest.sol = null; retest.genError = false;
+  retest.attempts += 1;
+  clearCanvas();
+  render(); // shows "Generating…"
+  try {
+    const r = await fetch(GEN_URL, { method:"POST", headers:HDRS, body: JSON.stringify({
+      skill: retest.skill, misconception: retest.misconception,
+      sourceProblem: retest.sourceProblem, attempt: retest.attempts
+    })});
+    const j = await r.json();
+    if (!j.ok || !j.problem) throw new Error("gen failed");
+    retest.problem = j.problem; retest.sol = j.solution || "";
+  } catch(e){ retest.genError = true; }
+  render();
+}
+
+async function checkRetest(){
+  if (!retest || !retest.problem) return;
+  if (!hasInk()){ retest.lastResult = { noInk:true }; retest.phase = "working"; render(); return; }
+  retest.phase = "grading"; render();
+  const img = captureCanvasPNG();
+  let res;
+  try {
+    const r = await fetch(SUPABASE_FN_URL, { method:"POST", headers:HDRS, body: JSON.stringify({
+      image: img, problem: retest.problem, skill: retest.skill, solution: retest.sol, selfGrade: "retest"
+    })});
+    res = await r.json();
+    if (!res.ok) throw new Error("grade failed");
+  } catch(e){ res = { error:true }; }
+  retest.lastResult = res;
+  if (res.error || res.noInk){ retest.phase = "working"; render(); return; }
+  retest.phase = "graded";
+  const correct = !!res.reached_correct_answer;
+  retest.lastCorrect = correct;
+  if (correct){
+    retest.streak += 1;
+    if (retest.streak >= 2){ retest.mastered = true; state.grades[retest.sourceN] = "good"; save(); }
+  } else {
+    retest.streak = 0;
+    if (retest.attempts >= RETEST_MAX){ retest.escalated = true; }
+  }
+  render();
+}
+
+function exitRetest(){
+  const n = retest ? retest.sourceN : state.current;
+  retest = null;
+  state.current = n;
+  clearCanvas();
+  render();
+}
+
+function normalButtons(){
+  ["checkBtn","nextRetestBtn","exitRetestBtn"].forEach(id => $(id).style.display = "none");
+  $("showSolution").style.display = ""; $("nextBtn").style.display = "";
+  document.querySelectorAll(".grade").forEach(b => b.style.display = "");
+  $("retestBanner").style.display = "none";
+}
+
+function renderRetestCard(){
+  const card = $("aiCard"); const r = retest; const res = r.lastResult;
+  card.classList.remove("err","ok");
+  if (r.phase === "grading"){
+    card.style.display="block";
+    card.innerHTML = `<div class="aiHead">🔎 Checking your work…</div><div>Reading what you wrote on the canvas.</div>`;
+    return;
+  }
+  if (!res){ card.style.display="none"; card.innerHTML=""; return; }
+  card.style.display="block";
+  if (res.noInk){ card.innerHTML = `<div class="aiHead">✍️ Show your work</div><div>Solve it on the canvas, then tap “Check my work”.</div>`; return; }
+  if (res.error){ card.classList.add("err"); card.innerHTML = `<div class="aiHead">🧭 Coach offline</div><div>Couldn't reach the coach. Tap “Check my work” to try again.</div>`; return; }
+  if (r.mastered){ card.classList.add("ok"); card.innerHTML = `<div class="aiHead">🎉 Mastered!</div><div>Two correct in a row on “${escapeHTML(r.skill)}”. You fixed it — head back to the packet when you're ready.</div>`; return; }
+  if (r.escalated){ card.classList.add("err"); card.innerHTML = `<div class="aiHead">🧭 Let's get help</div><div>You put in real work here. The full worked solution is shown below — bring it to your coach or teacher to walk through together.</div>`; return; }
+  if (r.lastCorrect){ card.classList.add("ok"); card.innerHTML = `<div class="aiHead">✅ Correct!</div><div>${escapeHTML(res.coaching_hint||"Nice work.")}</div><div class="aiMeta">One more in a row to lock it in.</div>`; return; }
+  card.innerHTML = `
+    <div class="aiHead">🔎 Not yet — here's the catch</div>
+    <div><span class="miscon">${escapeHTML(res.misconception||"")}</span> — ${escapeHTML(res.explanation||"")}</div>
+    <div class="hint"><b>Try this:</b> ${escapeHTML(res.coaching_hint||"")}</div>
+    ${res.try_representation ? `<div class="tryRep">Another way to see it: ${escapeHTML(res.try_representation)}</div>` : ""}`;
+  if (window.MathJax) MathJax.typesetPromise?.([card]);
+}
+
+function renderRetestView(){
+  const r = retest;
+  const pips = (r.streak>=1?"●":"○") + (r.streak>=2?"●":"○");
+  $("retestBanner").style.display = "flex";
+  $("retestBanner").innerHTML = `<span>🎯 Practice: ${escapeHTML(r.skill||"this skill")}</span><span class="pips">mastery ${pips} · try ${r.attempts}/${RETEST_MAX}</span>`;
+  $("chapter").textContent = "Targeted practice";
+  $("title").textContent = r.escalated ? "Let's get you some help" : (r.mastered ? "Skill mastered! 🎉" : "Fresh practice problem");
+  $("missionMove").style.display = "none";
+  $("lessonCard").style.display = "none";
+  $("attr").textContent = r.misconception ? ("fixing: " + r.misconception) : (r.skill || "");
+  if (r.genError) $("prompt").innerHTML = "Couldn't generate a fresh problem right now. Exit and try again, or re-read the worked solution on the original problem.";
+  else if (!r.problem) $("prompt").innerHTML = "✨ Generating a fresh problem just for this skill…";
+  else $("prompt").innerHTML = formatMathText(r.problem);
+  $("solution").innerHTML = formatMathText(r.sol || "");
+  if (r.escalated) $("solutionBox").classList.add("show"); else $("solutionBox").classList.remove("show");
+  renderRetestCard();
+  document.querySelectorAll(".grade").forEach(b => b.style.display = "none");
+  $("nextBtn").style.display = "none";
+  $("showSolution").style.display = r.problem ? "" : "none";
+  $("exitRetestBtn").style.display = "";
+  $("exitRetestBtn").textContent = (r.mastered || r.escalated) ? "Back to packet" : "Exit practice";
+  $("checkBtn").style.display = (r.phase === "working" && r.problem) ? "" : "none";
+  const showNext = (r.phase === "graded") && !r.mastered && !r.escalated;
+  $("nextRetestBtn").style.display = showNext ? "" : "none";
+  $("nextRetestBtn").textContent = r.lastCorrect ? "Next practice problem" : "Try another problem";
+  if (window.MathJax) MathJax.typesetPromise?.([$("prompt"), $("solution")]);
 }
 function currentProblem(){ return problems.find(p => p.n === state.current) || problems[0]; }
 function gradeLabel(g){ return g === "good" ? "secure" : g === "mid" ? "shaky" : g === "bad" ? "missed" : ""; }
@@ -468,7 +614,7 @@ function renderList(){
       <span class="pnum">${p.n}</span><span class="ptitle">${p.name}${isDiagnostic(p) ? '<span class="diagTag">diagnostic</span>' : ''}</span><span class="badge">${gradeLabel(g)}</span>
     </button>`;
   }).join("");
-  list.querySelectorAll("button").forEach(b => b.onclick = () => { state.current = Number(b.dataset.n); save(); render(); });
+  list.querySelectorAll("button").forEach(b => b.onclick = () => { retest = null; state.current = Number(b.dataset.n); save(); render(); });
 }
 
 function coachRecommendation(){
@@ -491,6 +637,7 @@ function renderStats(){
 }
 
 function renderProblem(){
+  normalButtons();
   const p = currentProblem();
   $("chapter").textContent = p.ch;
   $("title").textContent = `Problem ${p.n}: ${p.name}`;
@@ -503,6 +650,7 @@ function renderProblem(){
     : mode === "review"
       ? "This is a reteach/rebuild item selected because the skill cluster showed weakness."
       : "This is a source-packet item. Use it only after the diagnostic and reteach loop.";
+  $("missionMove").style.display = "";
   $("missionMove").innerHTML = `<b>Agent policy: ${cluster}</b>${move}`;
   const lesson = lessons[weak?.name || cluster];
   $("lessonCard").style.display = mode === "review" && lesson ? "block" : "none";
@@ -550,6 +698,7 @@ function render(){
   renderList();
   renderStats();
   if (mode === "summary") renderSummary();
+  else if (retest) renderRetestView();
   else renderProblem();
 }
 
@@ -572,6 +721,9 @@ function goNext(){
 
 $("showSolution").onclick = () => $("solutionBox").classList.add("show");
 $("nextBtn").onclick = goNext;
+$("checkBtn").onclick = checkRetest;
+$("nextRetestBtn").onclick = nextRetestProblem;
+$("exitRetestBtn").onclick = exitRetest;
 document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
   const g = b.dataset.grade;
   const p = currentProblem();
@@ -591,19 +743,19 @@ document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
   render();
 });
 $("modePractice").onclick = () => {
-  mode = "diagnostic";
+  retest = null; mode = "diagnostic";
   const next = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
   if (next) state.current = next.n;
   render();
 };
 $("modeReview").onclick = () => {
-  mode = "review";
+  retest = null; mode = "review";
   const weak = weakProblems()[0];
   if (weak) state.current = weak.n;
   save(); render();
 };
-$("modePacket").onclick = () => { mode = "packet"; render(); };
-$("modeSummary").onclick = () => { mode = "summary"; render(); };
+$("modePacket").onclick = () => { retest = null; mode = "packet"; render(); };
+$("modeSummary").onclick = () => { retest = null; mode = "summary"; render(); };
 $("brandFocus").onclick = () => { state.focusWork = true; save(); render(); };
 $("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); render(); };
 
