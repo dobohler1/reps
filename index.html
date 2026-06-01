@@ -125,6 +125,7 @@ h1 { font-size:24px; margin:7px 0 10px; line-height:1.2; }
 .aiCard.err { background:#fffbeb; border-color:#fde68a; color:#78350f; }
 .aiCard.ok { background:#ecfdf5; border-color:#6ee7b7; color:#065f46; }
 .aiCard .practiceBtn { margin-top:12px; }
+.aiCard .emailUnlockInput { width:100%; margin:8px 0; padding:10px 11px; border:1px solid #c7d2fe; border-radius:8px; font:inherit; }
 .retestBanner {
   margin:0 0 12px; padding:8px 12px; border-radius:8px; font-size:13px; font-weight:700;
   background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe;
@@ -217,7 +218,7 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.01.2 · self-healing loop</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.01.3 · free tier + email unlock</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -315,9 +316,24 @@ function save(){ localStorage.setItem(key, JSON.stringify(state)); }
 // --- Rep AI coach (Supabase Edge Function vision proxy) ---------------------
 // The Anthropic key lives ONLY server-side in the function. The anon key below
 // is a Supabase publishable key — safe to ship in client code.
-const SUPABASE_FN_URL = "https://flmtmihxpkcxvrasyyxt.supabase.co/functions/v1/analyze-work";
+const SUPABASE_BASE = "https://flmtmihxpkcxvrasyyxt.supabase.co/functions/v1";
+const SUPABASE_FN_URL = SUPABASE_BASE + "/analyze-work";
+const GEN_URL = SUPABASE_BASE + "/generate-retest";
+const ACCOUNT_URL = SUPABASE_BASE + "/account";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbXRtaWh4cGtjeHZyYXN5eXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MDQyNjksImV4cCI6MjA5NDM4MDI2OX0.osZWn5j7gzSJlUxr9xbpseDkxq5TDTUnj-pjVTFPEDw";
-const diagnoses = {}; // in-memory per-problem: "loading" | {…diagnosis} | {error} | {noInk}
+const HDRS = { "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" };
+const PAY_URL = ""; // TODO: paste the Stripe "Rep Pro" checkout link once price is confirmed
+const diagnoses = {}; // in-memory per-problem: "loading" | {…diagnosis} | {error} | {noInk} | {gated}
+
+function deviceId(){
+  let id = localStorage.getItem("rep_uid");
+  if (!id){ id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : "u-"+Date.now()+"-"+Math.random().toString(36).slice(2); localStorage.setItem("rep_uid", id); }
+  return id;
+}
+async function postFn(url, payload){
+  const r = await fetch(url, { method:"POST", headers:HDRS, body: JSON.stringify({ ...payload, userId: deviceId() }) });
+  return r.json();
+}
 
 function captureCanvasPNG(){
   const tmp = document.createElement("canvas");
@@ -335,14 +351,49 @@ function hasInk(){
   } catch(e){ return true; }
 }
 async function callDiagnose(p, grade, img){
-  const r = await fetch(SUPABASE_FN_URL, {
-    method:"POST",
-    headers:{ "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
-    body: JSON.stringify({ image:img, problem:p.q, skill:p.skill, solution:p.sol, selfGrade:grade })
-  });
-  const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "no result");
-  return j;
+  return await postFn(SUPABASE_FN_URL, { image:img, problem:p.q, skill:p.skill, solution:p.sol, selfGrade:grade });
+}
+async function runDiagnosis(p, g){
+  if (!hasInk()){ diagnoses[p.n] = { noInk:true }; render(); return; }
+  diagnoses[p.n] = "loading"; render();
+  const img = captureCanvasPNG();
+  let res;
+  try { res = await callDiagnose(p, g, img); } catch(e){ res = { error:true }; }
+  if (res && res.gated) diagnoses[p.n] = { gated: res.need };
+  else if (!res || !res.ok) diagnoses[p.n] = { error:true };
+  else diagnoses[p.n] = res;
+  render();
+}
+
+// Free-tier gate UI shared by the diagnosis card and the re-test card.
+function cannedFallback(p){
+  const l = lessons[clusterFor(p)];
+  return l ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #c7d2fe"><b>Meanwhile:</b> ${l.teach}</div>` : "";
+}
+function gateCardHTML(need){
+  if (need === "email"){
+    return `<div class="aiHead">🔓 Unlock more — free</div>
+      <div>You've used your first few free AI tips. Add a parent email to unlock more free coaching.</div>
+      <input id="emailUnlockInput" type="email" placeholder="parent@email.com" class="emailUnlockInput">
+      <button class="primary practiceBtn" id="emailUnlockBtn">Unlock free coaching</button>
+      <div class="aiMeta" id="emailUnlockMsg"></div>`;
+  }
+  return `<div class="aiHead">⭐ Upgrade to keep going</div>
+    <div>You've used all your free AI coaching. Rep Pro unlocks unlimited coaching for the summer.</div>
+    <button class="primary practiceBtn" id="payBtn">Upgrade to Rep Pro</button>`;
+}
+function wireGate(retryFn){
+  const eb = $("emailUnlockBtn");
+  if (eb) eb.onclick = async () => {
+    const v = ($("emailUnlockInput").value || "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ $("emailUnlockMsg").textContent = "Enter a valid email."; return; }
+    eb.disabled = true; $("emailUnlockMsg").textContent = "Unlocking…";
+    let j; try { j = await postFn(ACCOUNT_URL, { action:"set-email", email:v }); } catch(e){ j = null; }
+    if (j && j.ok) retryFn();
+    else { eb.disabled = false; $("emailUnlockMsg").textContent = "Couldn't unlock — try again."; }
+  };
+  const pb = $("payBtn");
+  if (pb) pb.onclick = () => { if (PAY_URL) window.open(PAY_URL, "_blank"); else alert("Rep Pro checkout is coming soon!"); };
 }
 function renderAICard(p){
   const card = $("aiCard");
@@ -366,6 +417,12 @@ function renderAICard(p){
       : `Couldn't reach the live coach right now. Re-read the worked solution, then try a similar problem.`);
     return;
   }
+  if (d.gated){
+    card.classList.add("err");
+    card.innerHTML = gateCardHTML(d.gated) + cannedFallback(p);
+    wireGate(() => { diagnoses[p.n] = null; runDiagnosis(p, state.grades[p.n]); });
+    return;
+  }
   const conf = d.confidence
     ? `<div class="aiMeta">confidence: ${d.confidence}${d.work_visible===false?" · couldn't read clear work — hint is from the problem":""}</div>` : "";
   const canPractice = d.misconception && d.misconception.toLowerCase() !== "none";
@@ -382,8 +439,6 @@ function renderAICard(p){
 }
 
 // --- Rep self-healing re-test loop -----------------------------------------
-const GEN_URL = "https://flmtmihxpkcxvrasyyxt.supabase.co/functions/v1/generate-retest";
-const HDRS = { "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" };
 const RETEST_MAX = 4;       // attempts before escalating to a human
 let retest = null;          // { skill, misconception, sourceN, problem, sol, attempts, streak, phase, ... }
 
@@ -402,18 +457,16 @@ function startRetest(p, diag){
 async function nextRetestProblem(){
   retest.phase = "working"; retest.lastResult = null;
   retest.problem = null; retest.sol = null; retest.genError = false;
-  retest.attempts += 1;
   clearCanvas();
+  const tryAttempt = retest.attempts + 1;
   render(); // shows "Generating…"
-  try {
-    const r = await fetch(GEN_URL, { method:"POST", headers:HDRS, body: JSON.stringify({
-      skill: retest.skill, misconception: retest.misconception,
-      sourceProblem: retest.sourceProblem, attempt: retest.attempts
-    })});
-    const j = await r.json();
-    if (!j.ok || !j.problem) throw new Error("gen failed");
-    retest.problem = j.problem; retest.sol = j.solution || "";
-  } catch(e){ retest.genError = true; }
+  let j;
+  try { j = await postFn(GEN_URL, { skill:retest.skill, misconception:retest.misconception, sourceProblem:retest.sourceProblem, attempt:tryAttempt }); }
+  catch(e){ j = null; }
+  if (j && j.gated){ retest.lastResult = { gated:j.need }; retest.pending = "gen"; render(); return; }
+  if (!j || !j.ok || !j.problem){ retest.genError = true; render(); return; }
+  retest.attempts = tryAttempt;
+  retest.problem = j.problem; retest.sol = j.solution || "";
   render();
 }
 
@@ -423,15 +476,11 @@ async function checkRetest(){
   retest.phase = "grading"; render();
   const img = captureCanvasPNG();
   let res;
-  try {
-    const r = await fetch(SUPABASE_FN_URL, { method:"POST", headers:HDRS, body: JSON.stringify({
-      image: img, problem: retest.problem, skill: retest.skill, solution: retest.sol, selfGrade: "retest"
-    })});
-    res = await r.json();
-    if (!res.ok) throw new Error("grade failed");
-  } catch(e){ res = { error:true }; }
-  retest.lastResult = res;
-  if (res.error || res.noInk){ retest.phase = "working"; render(); return; }
+  try { res = await postFn(SUPABASE_FN_URL, { image:img, problem:retest.problem, skill:retest.skill, solution:retest.sol, selfGrade:"retest" }); }
+  catch(e){ res = { error:true }; }
+  if (res && res.gated){ retest.lastResult = { gated:res.need }; retest.pending = "check"; retest.phase = "working"; render(); return; }
+  retest.lastResult = res || { error:true };
+  if (!res || res.error || res.noInk || !res.ok){ retest.phase = "working"; render(); return; }
   retest.phase = "graded";
   const correct = !!res.reached_correct_answer;
   retest.lastCorrect = correct;
@@ -466,6 +515,12 @@ function renderRetestCard(){
   if (r.phase === "grading"){
     card.style.display="block";
     card.innerHTML = `<div class="aiHead">🔎 Checking your work…</div><div>Reading what you wrote on the canvas.</div>`;
+    return;
+  }
+  if (res && res.gated){
+    card.style.display="block"; card.classList.add("err");
+    card.innerHTML = gateCardHTML(res.gated);
+    wireGate(() => { retest.lastResult = null; if (retest.pending === "gen") nextRetestProblem(); else checkRetest(); });
     return;
   }
   if (!res){ card.style.display="none"; card.innerHTML=""; return; }
@@ -731,16 +786,7 @@ document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
   save();
   // AI coach fires only on shaky/missed — the metered, wrong-answer path.
   if (g === "good") { delete diagnoses[p.n]; render(); return; }
-  if (!hasInk()) { diagnoses[p.n] = { noInk:true }; render(); return; }
-  diagnoses[p.n] = "loading";
-  render();
-  const img = captureCanvasPNG();
-  try {
-    diagnoses[p.n] = await callDiagnose(p, g, img);
-  } catch (e) {
-    diagnoses[p.n] = { error:true };
-  }
-  render();
+  runDiagnosis(p, g);
 });
 $("modePractice").onclick = () => {
   retest = null; mode = "diagnostic";
