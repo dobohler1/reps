@@ -151,6 +151,12 @@ canvas {
   background-image:linear-gradient(#f1f5f9 1px, transparent 1px);
   background-size:100% 34px;
 }
+.canvasWrap { position:relative; }
+#markCanvas {
+  position:absolute; left:0; top:0; width:100%; height:100%;
+  min-height:0; background:none; border:none; border-radius:8px;
+  pointer-events:none;
+}
 .actions {
   display:flex; flex-wrap:wrap; gap:8px; padding:12px 18px 18px; border-top:1px solid var(--line);
 }
@@ -218,7 +224,7 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.01.4 · Pro checkout live</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.01.5 · marks up your work</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -259,7 +265,10 @@ canvas {
             <button class="mini" id="togglePen">Pen: thick</button>
           </div>
         </div>
-        <canvas id="workCanvas" width="900" height="1100"></canvas>
+        <div class="canvasWrap">
+          <canvas id="workCanvas" width="900" height="1100"></canvas>
+          <canvas id="markCanvas" width="900" height="1100"></canvas>
+        </div>
         <div class="smallNote">Designed for Apple Pencil. Nothing leaves this page in the prototype; progress is stored in this browser.</div>
       </div>
     </section>
@@ -420,6 +429,7 @@ async function checkPaidReturn(){
 function renderAICard(p){
   const card = $("aiCard");
   const d = diagnoses[p.n];
+  clearMarks();
   card.classList.remove("err");
   if (!d){ card.style.display="none"; card.innerHTML=""; return; }
   card.style.display="block";
@@ -457,6 +467,7 @@ function renderAICard(p){
     ${canPractice ? `<button class="primary practiceBtn" id="practiceBtn">Practice this skill until it sticks →</button>` : ""}`;
   const pb = $("practiceBtn");
   if (pb) pb.onclick = () => startRetest(p, d);
+  if (d.marks) drawMarks(d.marks);
   if (window.MathJax) MathJax.typesetPromise?.([card]);
 }
 
@@ -533,6 +544,7 @@ function normalButtons(){
 
 function renderRetestCard(){
   const card = $("aiCard"); const r = retest; const res = r.lastResult;
+  clearMarks();
   card.classList.remove("err","ok");
   if (r.phase === "grading"){
     card.style.display="block";
@@ -551,12 +563,13 @@ function renderRetestCard(){
   if (res.error){ card.classList.add("err"); card.innerHTML = `<div class="aiHead">🧭 Coach offline</div><div>Couldn't reach the coach. Tap “Check my work” to try again.</div>`; return; }
   if (r.mastered){ card.classList.add("ok"); card.innerHTML = `<div class="aiHead">🎉 Mastered!</div><div>Two correct in a row on “${escapeHTML(r.skill)}”. You fixed it — head back to the packet when you're ready.</div>`; return; }
   if (r.escalated){ card.classList.add("err"); card.innerHTML = `<div class="aiHead">🧭 Let's get help</div><div>You put in real work here. The full worked solution is shown below — bring it to your coach or teacher to walk through together.</div>`; return; }
-  if (r.lastCorrect){ card.classList.add("ok"); card.innerHTML = `<div class="aiHead">✅ Correct!</div><div>${escapeHTML(res.coaching_hint||"Nice work.")}</div><div class="aiMeta">One more in a row to lock it in.</div>`; return; }
+  if (r.lastCorrect){ card.classList.add("ok"); card.innerHTML = `<div class="aiHead">✅ Correct!</div><div>${escapeHTML(res.coaching_hint||"Nice work.")}</div><div class="aiMeta">One more in a row to lock it in.</div>`; if (res.marks) drawMarks(res.marks); return; }
   card.innerHTML = `
     <div class="aiHead">🔎 Not yet — here's the catch</div>
     <div><span class="miscon">${escapeHTML(res.misconception||"")}</span> — ${escapeHTML(res.explanation||"")}</div>
     <div class="hint"><b>Try this:</b> ${escapeHTML(res.coaching_hint||"")}</div>
     ${res.try_representation ? `<div class="tryRep">Another way to see it: ${escapeHTML(res.try_representation)}</div>` : ""}`;
+  if (res.marks) drawMarks(res.marks);
   if (window.MathJax) MathJax.typesetPromise?.([card]);
 }
 
@@ -829,6 +842,35 @@ $("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); rend
 
 const canvas = $("workCanvas");
 const ctx = canvas.getContext("2d");
+const markCanvas = $("markCanvas");
+const mctx = markCanvas.getContext("2d");
+
+function clearMarks(){ if (mctx) mctx.clearRect(0,0,markCanvas.width,markCanvas.height); }
+// Render teacher-style red-pen markup from normalized (0-1) coordinates.
+function drawMarks(marks){
+  clearMarks();
+  if (!marks || !marks.length){ markCanvas.style.display="none"; return; }
+  markCanvas.style.display="block";
+  const W=markCanvas.width, H=markCanvas.height, c=mctx, RED="#e0245e";
+  c.lineCap="round"; c.lineJoin="round";
+  for (const m of marks){
+    const x=(m.x||0)*W, y=(m.y||0)*H, w=Math.max(m.w||0.08,0.02)*W, h=Math.max(m.h||0.05,0.03)*H;
+    const cx=x+w/2, cy=y+h/2;
+    c.strokeStyle=RED; c.fillStyle=RED; c.lineWidth=5;
+    if (m.type==="circle"){ c.beginPath(); c.ellipse(cx,cy,w/2+12,h/2+12,0,0,Math.PI*2); c.stroke(); }
+    else if (m.type==="strike"){ c.beginPath(); c.moveTo(x-4,cy); c.lineTo(x+w+4,cy); c.stroke(); }
+    else if (m.type==="underline"){ c.beginPath(); c.moveTo(x-4,y+h+6); c.lineTo(x+w+4,y+h+6); c.stroke(); }
+    else if (m.type==="check"){ const k=x-12; c.beginPath(); c.moveTo(k-26,cy+2); c.lineTo(k-14,cy+16); c.lineTo(k+6,cy-18); c.stroke(); }
+    else if (m.type==="arrow"){ const tx=x+w+8, ta=Math.min(x+w+120,W-12); c.beginPath(); c.moveTo(ta,cy); c.lineTo(tx,cy); c.stroke(); c.beginPath(); c.moveTo(tx,cy); c.lineTo(tx+16,cy-8); c.lineTo(tx+16,cy+8); c.closePath(); c.fill(); }
+    if (m.note){
+      c.font="bold 24px -apple-system,BlinkMacSystemFont,sans-serif";
+      let nx = (m.type==="check") ? x+w+10 : Math.min(x+w+18, W-280); if (nx<4) nx=4;
+      const ny = (m.type==="circle"||m.type==="strike") ? Math.min(y+h+34, H-8) : cy+8;
+      c.lineWidth=6; c.strokeStyle="rgba(255,255,255,0.95)"; c.strokeText(m.note, nx, ny);
+      c.fillStyle=RED; c.fillText(m.note, nx, ny);
+    }
+  }
+}
 let drawing = false;
 let strokePoints = [];
 function pos(e){
@@ -891,7 +933,7 @@ function endDraw(e){
   drawing = false;
   strokePoints = [];
 }
-function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); }
+function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); clearMarks(); }
 document.addEventListener("selectstart", e => {
   if (e.target.closest?.(".app")) e.preventDefault();
 }, { passive:false });
