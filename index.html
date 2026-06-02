@@ -218,7 +218,7 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.01.3 · free tier + email unlock</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.01.4 · Pro checkout live</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -322,7 +322,10 @@ const GEN_URL = SUPABASE_BASE + "/generate-retest";
 const ACCOUNT_URL = SUPABASE_BASE + "/account";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbXRtaWh4cGtjeHZyYXN5eXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MDQyNjksImV4cCI6MjA5NDM4MDI2OX0.osZWn5j7gzSJlUxr9xbpseDkxq5TDTUnj-pjVTFPEDw";
 const HDRS = { "Authorization":"Bearer "+SUPABASE_ANON, "apikey":SUPABASE_ANON, "Content-Type":"application/json" };
-const PAY_URL = ""; // TODO: paste the Stripe "Rep Pro" checkout link once price is confirmed
+const PRO_URL = "https://buy.stripe.com/00w4gz0LmdcU0zIbKI3AY04"; // $20/mo
+const MAX_URL = "https://buy.stripe.com/6oU00j8dO7SAgyG8yw3AY05"; // $75/mo
+const ULT_URL = "https://buy.stripe.com/dRmeVd65GegY1DM2a83AY06"; // $150/mo
+const PAY_URL = PRO_URL; // in-app paywall sends to Rep Pro by default
 const diagnoses = {}; // in-memory per-problem: "loading" | {…diagnosis} | {error} | {noInk} | {gated}
 
 function deviceId(){
@@ -393,7 +396,26 @@ function wireGate(retryFn){
     else { eb.disabled = false; $("emailUnlockMsg").textContent = "Couldn't unlock — try again."; }
   };
   const pb = $("payBtn");
-  if (pb) pb.onclick = () => { if (PAY_URL) window.open(PAY_URL, "_blank"); else alert("Rep Pro checkout is coming soon!"); };
+  if (pb) pb.onclick = () => {
+    const url = PAY_URL + (PAY_URL.includes("?") ? "&" : "?") + "client_reference_id=" + encodeURIComponent(deviceId());
+    window.open(url, "_blank");
+  };
+}
+
+// After returning from Stripe (?paid=1), poll entitlement (webhook may lag a few s).
+async function checkPaidReturn(){
+  if (!/[?&]paid=1/.test(location.search)) return;
+  for (let i = 0; i < 6; i++){
+    let s; try { s = await postFn(ACCOUNT_URL, { action:"status" }); } catch(e){ s = null; }
+    if (s && s.entitled){
+      Object.keys(diagnoses).forEach(k => { if (diagnoses[k] && diagnoses[k].gated) delete diagnoses[k]; });
+      if (retest && retest.lastResult && retest.lastResult.gated) retest.lastResult = null;
+      render();
+      alert("🎉 Rep Pro is unlocked — unlimited coaching all summer. Thank you!");
+      return;
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
 }
 function renderAICard(p){
   const card = $("aiCard");
@@ -892,6 +914,7 @@ setInterval(() => {
 }, 1000);
 
 render();
+checkPaidReturn();
 </script>
 </body>
 </html>
