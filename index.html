@@ -56,6 +56,22 @@ button, input, select { font:inherit; -webkit-user-select:none; user-select:none
   margin:12px 0 16px; line-height:1.35; font-size:13px;
 }
 .coachBox strong { color:#bfdbfe; display:block; margin-bottom:4px; }
+.profileBox {
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+  border-radius:10px; padding:12px; margin:0 0 14px; display:grid; gap:8px;
+}
+.profileBox label { color:#cbd5e1; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.profileBox input {
+  width:100%; border:1px solid rgba(255,255,255,.14); border-radius:8px;
+  background:rgba(255,255,255,.08); color:#fff; padding:9px 10px; font:inherit;
+}
+.profileBox input::placeholder { color:#94a3b8; }
+.profileActions { display:flex; gap:8px; }
+.profileActions button {
+  flex:1; border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:8px 9px;
+  background:rgba(255,255,255,.1); color:#fff; font-weight:800; cursor:pointer;
+}
+.profileHint { color:#94a3b8; font-size:11.5px; line-height:1.3; }
 .plist { display:grid; gap:6px; }
 .pbtn {
   width:100%; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.04);
@@ -211,6 +227,17 @@ canvas {
       <strong>Coach recommendation</strong>
       <span id="coachText">Start with Problem 1. Mark each problem honestly after checking the solution.</span>
     </div>
+    <div class="profileBox">
+      <label for="studentName">Student</label>
+      <input id="studentName" placeholder="Student first name">
+      <label for="parentEmail">Parent email</label>
+      <input id="parentEmail" type="email" placeholder="parent@email.com">
+      <div class="profileActions">
+        <button id="saveProfile">Save profile</button>
+        <button id="newStudent">New student</button>
+      </div>
+      <div class="profileHint" id="profileHint">Progress is separated by student profile on this device.</div>
+    </div>
     <div class="plist" id="problemList"></div>
   </aside>
 
@@ -224,7 +251,8 @@ canvas {
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.01.5 · marks up your work</div>
+        <button class="focusBtn" id="refreshAccess">Refresh access</button>
+        <div class="buildInfo" id="buildInfo">v2026.06.03.1 · profiles + safer AI</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -269,7 +297,7 @@ canvas {
           <canvas id="workCanvas" width="900" height="1100"></canvas>
           <canvas id="markCanvas" width="900" height="1100"></canvas>
         </div>
-        <div class="smallNote">Designed for Apple Pencil. Nothing leaves this page in the prototype; progress is stored in this browser.</div>
+        <div class="smallNote">Designed for Apple Pencil. Progress stays in this browser. When you use AI coaching, scratch work is sent securely to Rep's AI coach for feedback.</div>
       </div>
     </section>
 
@@ -312,15 +340,73 @@ const problems = [
 
 const diagnosticIds = [1,3,7,9,11,14,17,20,22,25];
 const key = "adaptive_exam_mission_builder_v1";
-let state = JSON.parse(localStorage.getItem(key) || "{}");
+function freshStudentState(profile = {}) {
+  return {
+    grades: {},
+    current: 1,
+    focusWork: false,
+    profile: {
+      studentName: profile.studentName || "",
+      parentEmail: profile.parentEmail || ""
+    }
+  };
+}
+function profileIdFor(profile) {
+  const raw = `${profile.parentEmail || "local"}:${profile.studentName || "student"}`.trim().toLowerCase();
+  return raw.replace(/[^a-z0-9@._-]+/g, "-").replace(/-+/g, "-").slice(0, 80) || "default";
+}
+let appState = JSON.parse(localStorage.getItem(key) || "{}");
+if (!appState.profiles) {
+  const migrated = freshStudentState(appState.profile || {});
+  migrated.grades = appState.grades || {};
+  migrated.current = appState.current || 1;
+  migrated.focusWork = !!appState.focusWork;
+  appState = { activeProfileId: "default", profiles: { default: migrated } };
+}
+appState.activeProfileId ||= Object.keys(appState.profiles || {})[0] || "default";
+appState.profiles ||= {};
+appState.profiles[appState.activeProfileId] ||= freshStudentState();
+let state = appState.profiles[appState.activeProfileId];
 state.grades ||= {};
 state.current ||= 1;
 state.focusWork ||= false;
+state.profile ||= { studentName:"", parentEmail:"" };
 let mode = "diagnostic";
 let penThick = true;
 let started = Date.now();
 const $ = id => document.getElementById(id);
-function save(){ localStorage.setItem(key, JSON.stringify(state)); }
+function save(){
+  appState.profiles[appState.activeProfileId] = state;
+  localStorage.setItem(key, JSON.stringify(appState));
+}
+function clearSessionTransientState() {
+  retest = null;
+  Object.keys(diagnoses).forEach(k => delete diagnoses[k]);
+  clearCanvas?.();
+}
+function saveCurrentProfile(profile) {
+  const oldId = appState.activeProfileId;
+  const newId = profileIdFor(profile);
+  state.profile = { ...state.profile, ...profile };
+  if (newId !== oldId) {
+    appState.profiles[newId] = state;
+    delete appState.profiles[oldId];
+    appState.activeProfileId = newId;
+  }
+  save();
+  clearSessionTransientState();
+  render();
+}
+function switchToProfile(profile, fresh=false) {
+  const id = profileIdFor(profile);
+  if (fresh || !appState.profiles[id]) appState.profiles[id] = freshStudentState(profile);
+  appState.activeProfileId = id;
+  state = appState.profiles[id];
+  state.profile = { ...state.profile, ...profile };
+  save();
+  clearSessionTransientState();
+  render();
+}
 
 // --- Rep AI coach (Supabase Edge Function vision proxy) ---------------------
 // The Anthropic key lives ONLY server-side in the function. The anon key below
@@ -343,7 +429,18 @@ function deviceId(){
   return id;
 }
 async function postFn(url, payload){
-  const r = await fetch(url, { method:"POST", headers:HDRS, body: JSON.stringify({ ...payload, userId: deviceId() }) });
+  const r = await fetch(url, {
+    method:"POST",
+    headers:HDRS,
+    body: JSON.stringify({
+      ...payload,
+      userId: deviceId(),
+      profileId: appState.activeProfileId,
+      studentId: appState.activeProfileId,
+      studentName: state.profile?.studentName || "",
+      parentEmail: state.profile?.parentEmail || ""
+    })
+  });
   return r.json();
 }
 
@@ -366,6 +463,7 @@ async function callDiagnose(p, grade, img){
   return await postFn(SUPABASE_FN_URL, { image:img, problem:p.q, skill:p.skill, solution:p.sol, selfGrade:grade });
 }
 async function runDiagnosis(p, g){
+  if (diagnoses[p.n] === "loading") return;
   if (!hasInk()){ diagnoses[p.n] = { noInk:true }; render(); return; }
   diagnoses[p.n] = "loading"; render();
   const img = captureCanvasPNG();
@@ -413,18 +511,26 @@ function wireGate(retryFn){
 
 // After returning from Stripe (?paid=1), poll entitlement (webhook may lag a few s).
 async function checkPaidReturn(){
-  if (!/[?&]paid=1/.test(location.search)) return;
+  if (!/[?&]paid=1/.test(location.search)) return false;
+  return await refreshAccess(true);
+}
+async function refreshAccess(showAlert=false){
+  $("refreshAccess").disabled = true;
   for (let i = 0; i < 6; i++){
     let s; try { s = await postFn(ACCOUNT_URL, { action:"status" }); } catch(e){ s = null; }
     if (s && s.entitled){
       Object.keys(diagnoses).forEach(k => { if (diagnoses[k] && diagnoses[k].gated) delete diagnoses[k]; });
       if (retest && retest.lastResult && retest.lastResult.gated) retest.lastResult = null;
       render();
-      alert("🎉 Rep Pro is unlocked — unlimited coaching all summer. Thank you!");
-      return;
+      if (showAlert) alert("🎉 Rep Pro is unlocked — unlimited coaching all summer. Thank you!");
+      $("refreshAccess").disabled = false;
+      return true;
     }
     await new Promise(r => setTimeout(r, 2000));
   }
+  $("refreshAccess").disabled = false;
+  if (showAlert) alert("I couldn't confirm Rep Pro access yet. If you just paid, wait a few seconds and tap Refresh access.");
+  return false;
 }
 function renderAICard(p){
   const card = $("aiCard");
@@ -724,6 +830,12 @@ function renderStats(){
   $("doneStat").textContent = `${grades.length}/25`;
   $("strongStat").textContent = grades.filter(g => g === "good").length;
   $("coachText").textContent = coachRecommendation();
+  $("studentName").value = state.profile?.studentName || "";
+  $("parentEmail").value = state.profile?.parentEmail || "";
+  const label = state.profile?.studentName
+    ? `Active: ${state.profile.studentName}${state.profile.parentEmail ? " · " + state.profile.parentEmail : ""}`
+    : "Progress is separated by student profile on this device.";
+  $("profileHint").textContent = label;
 }
 
 function renderProblem(){
@@ -817,6 +929,7 @@ $("exitRetestBtn").onclick = exitRetest;
 document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
   const g = b.dataset.grade;
   const p = currentProblem();
+  if (diagnoses[p.n] === "loading") return;
   state.grades[p.n] = g;
   save();
   // AI coach fires only on shaky/missed — the metered, wrong-answer path.
@@ -839,6 +952,25 @@ $("modePacket").onclick = () => { retest = null; mode = "packet"; render(); };
 $("modeSummary").onclick = () => { retest = null; mode = "summary"; render(); };
 $("brandFocus").onclick = () => { state.focusWork = true; save(); render(); };
 $("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); render(); };
+$("saveProfile").onclick = () => {
+  const studentName = $("studentName").value.trim();
+  const parentEmail = $("parentEmail").value.trim();
+  if (parentEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(parentEmail)) {
+    $("profileHint").textContent = "Enter a valid parent email, or leave it blank for local-only testing.";
+    return;
+  }
+  saveCurrentProfile({ studentName, parentEmail });
+};
+$("newStudent").onclick = () => {
+  const studentName = $("studentName").value.trim();
+  const parentEmail = $("parentEmail").value.trim();
+  if (!studentName) {
+    $("profileHint").textContent = "Type the new student's first name, then tap New student.";
+    return;
+  }
+  switchToProfile({ studentName, parentEmail }, true);
+};
+$("refreshAccess").onclick = () => refreshAccess(true);
 
 const canvas = $("workCanvas");
 const ctx = canvas.getContext("2d");
@@ -935,9 +1067,11 @@ function endDraw(e){
 }
 function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); clearMarks(); }
 document.addEventListener("selectstart", e => {
+  if (e.target.closest?.("input, textarea")) return;
   if (e.target.closest?.(".app")) e.preventDefault();
 }, { passive:false });
 document.addEventListener("contextmenu", e => {
+  if (e.target.closest?.("input, textarea")) return;
   if (e.target.closest?.(".app")) e.preventDefault();
 }, { passive:false });
 canvas.addEventListener("gesturestart", e => e.preventDefault(), { passive:false });
