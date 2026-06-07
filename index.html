@@ -218,9 +218,9 @@ canvas {
 <div class="app">
   <aside class="side">
     <button class="brand" id="brandFocus">Adaptive Exam Mission<span class="brandHint">Tap for big writing area</span></button>
-    <div class="sub">Teacher packet in, learning mission out. The packet defines the target; the coach chooses the fastest path.</div>
+    <div class="sub">Start with a 10-problem placement diagnostic. The coach finds the right level, then teaches the fastest path forward.</div>
     <div class="statgrid">
-      <div class="stat"><b id="doneStat">0/25</b><span>attempted</span></div>
+      <div class="stat"><b id="doneStat">0/10</b><span>attempted</span></div>
       <div class="stat"><b id="strongStat">0</b><span>secure</span></div>
     </div>
     <div class="coachBox">
@@ -246,13 +246,13 @@ canvas {
       <div class="seg">
         <button id="modePractice" class="on">Diagnostic</button>
         <button id="modeReview">Teach weak spots</button>
-        <button id="modePacket">Full packet</button>
+        <button id="modePacket">Practice ladder</button>
         <button id="modeSummary">Summary</button>
       </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.03.1 · profiles + safer AI</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.07.1 · pre-algebra diagnostic</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -335,10 +335,21 @@ const problems = [
 {n:22, ch:"Ch 10 — Quadratics", name:"Parabola features", skill:"Axis of symmetry, vertex, intercepts, and graphing a parabola.", q:"For y = x^2 - 6x + 11, find the axis of symmetry, the y-intercept or x-intercepts, and the vertex; then graph without a table.", sol:"Axis: x = -b/(2a) = -(-6)/(2*1) = 3.\nVertex: plug in x=3 -> y = 9 - 18 + 11 = 2, so (3,2).\nDiscriminant: 36 - 44 = -8, so no real x-intercepts.\ny-intercept: x=0 gives y=11, so (0,11). Mirror point is (6,11).\nOpens up."},
 {n:23, ch:"Ch 9 — Quadratics", name:"Square-root property", skill:"Solving a quadratic by the square-root property.", q:"Solve: -3(b - 4)^2 = -15.", sol:"Divide by -3: (b - 4)^2 = 5.\nTake square roots: b - 4 = ±sqrt(5).\nAnswer: b = 4 ± sqrt(5)."},
 {n:24, ch:"Word Problems", name:"Coin system", skill:"System of equations word problem: coin / mixture problem.", q:"Halim had 63 coins, all nickels and pennies, worth $1.23 total. How many of each coin?", sol:"Let n = nickels and p = pennies, using cents.\nn + p = 63.\n5n + p = 123.\nSubtract: 4n = 60 -> n = 15.\np = 63 - 15 = 48.\nAnswer: 15 nickels and 48 pennies."},
-{n:25, ch:"Word Problems", name:"Closing-distance rate", skill:"Closing-distance rate problem: combined speed of objects moving toward each other.", q:"A car leaves Berkeley at 9:00 am going 75 mph; at the same time a motorcyclist leaves Fresno going 90 mph. The cities are 180 mi apart. At what time do they pass?", sol:"Combined closing speed = 75 + 90 = 165 mph.\ntime = distance / rate = 180 / 165 = 12/11 ≈ 1.1 hours.\nThat is about 1 hour 5.5 minutes after 9:00 am.\nAnswer: about 10:05 am."}
+{n:25, ch:"Word Problems", name:"Closing-distance rate", skill:"Closing-distance rate problem: combined speed of objects moving toward each other.", q:"A car leaves Berkeley at 9:00 am going 75 mph; at the same time a motorcyclist leaves Fresno going 90 mph. The cities are 180 mi apart. At what time do they pass?", sol:"Combined closing speed = 75 + 90 = 165 mph.\ntime = distance / rate = 180 / 165 = 12/11 ≈ 1.1 hours.\nThat is about 1 hour 5.5 minutes after 9:00 am.\nAnswer: about 10:05 am."},
+{n:26, ch:"Pre-Algebra — Number Sense", name:"Integer operations", skill:"Adding and subtracting integers; track direction and distance from zero.", q:"Simplify: -18 + 7 - (-5).", sol:"Subtracting -5 means add 5.\n-18 + 7 + 5 = -11 + 5 = -6.\nAnswer: -6."},
+{n:27, ch:"Pre-Algebra — Fractions", name:"Fraction operations", skill:"Adding fractions with unlike denominators; use a common denominator and simplify.", q:"Simplify: 3/4 + 5/6.", sol:"The least common denominator of 4 and 6 is 12.\n3/4 = 9/12 and 5/6 = 10/12.\n9/12 + 10/12 = 19/12 = 1 7/12.\nAnswer: 19/12 or 1 7/12."},
+{n:28, ch:"Pre-Algebra — Decimals & Percents", name:"Percent of a number", skill:"Convert a percent to a decimal and multiply.", q:"A jacket costs $48. It is 25% off. How much money is taken off the price?", sol:"25% = 0.25.\n0.25 * 48 = 12.\nAnswer: $12 is taken off."},
+{n:29, ch:"Pre-Algebra — Order of Operations", name:"Order of operations", skill:"Evaluate with parentheses, exponents, multiplication/division, then addition/subtraction.", q:"Evaluate: 6 + 3(8 - 5)^2.", sol:"Parentheses first: 8 - 5 = 3.\nExponent: 3^2 = 9.\nMultiply: 3 * 9 = 27.\nAdd: 6 + 27 = 33.\nAnswer: 33."},
+{n:30, ch:"Pre-Algebra — Ratios", name:"Equivalent ratios", skill:"Use proportional reasoning to find a missing value in equivalent ratios.", q:"A recipe uses 3 cups of flour for every 2 cups of sugar. If you use 12 cups of flour, how many cups of sugar do you need?", sol:"3 cups flour scales to 12 cups flour by multiplying by 4.\nMultiply the sugar by the same factor: 2 * 4 = 8.\nAnswer: 8 cups of sugar."},
+{n:31, ch:"Pre-Algebra — Expressions", name:"Evaluate expression", skill:"Substitute values into an expression and follow order of operations.", q:"Evaluate 4x - 3y when x = -2 and y = 5.", sol:"Substitute: 4(-2) - 3(5).\n4(-2) = -8 and 3(5) = 15.\n-8 - 15 = -23.\nAnswer: -23."},
+{n:32, ch:"Pre-Algebra — Equations", name:"Two-step equation", skill:"Solve a two-step equation using inverse operations.", q:"Solve: 3x - 7 = 20.", sol:"Add 7 to both sides: 3x = 27.\nDivide by 3: x = 9.\nAnswer: x = 9."},
+{n:33, ch:"Pre-Algebra — Coordinate Plane", name:"Slope from graph points", skill:"Find slope as change in y over change in x between two points.", q:"Find the slope of the line through (2, 3) and (6, 11).", sol:"Slope = change in y / change in x.\n(11 - 3) / (6 - 2) = 8 / 4 = 2.\nAnswer: slope = 2."},
+{n:34, ch:"Pre-Algebra — Geometry", name:"Area and perimeter", skill:"Use rectangle area and perimeter formulas with units.", q:"A rectangle is 9 cm long and 4 cm wide. Find its area and perimeter.", sol:"Area = length * width = 9 * 4 = 36 square cm.\nPerimeter = 2(length + width) = 2(9 + 4) = 26 cm.\nAnswer: area 36 square cm; perimeter 26 cm."},
+{n:35, ch:"Pre-Algebra — Statistics", name:"Mean and median", skill:"Find mean and median from a small data set.", q:"For the data set 6, 10, 4, 8, 12, find the mean and the median.", sol:"Order the data: 4, 6, 8, 10, 12.\nMedian is the middle value: 8.\nMean = (6 + 10 + 4 + 8 + 12) / 5 = 40 / 5 = 8.\nAnswer: mean = 8, median = 8."}
 ];
 
-const diagnosticIds = [1,3,7,9,11,14,17,20,22,25];
+const diagnosticIds = [26,27,28,29,30,31,32,33,34,35];
+const PLACEMENT_PASS_RATE = 0.93;
 const key = "adaptive_exam_mission_builder_v1";
 function freshStudentState(profile = {}) {
   return {
@@ -706,7 +717,10 @@ function renderRetestView(){
   $("nextRetestBtn").textContent = r.lastCorrect ? "Next practice problem" : "Try another problem";
   if (window.MathJax) MathJax.typesetPromise?.([$("prompt"), $("solution")]);
 }
-function currentProblem(){ return problems.find(p => p.n === state.current) || problems[0]; }
+function currentProblem(){
+  const visible = visibleProblems();
+  return visible.find(p => p.n === state.current) || visible[0] || problems[0];
+}
 function gradeLabel(g){ return g === "good" ? "secure" : g === "mid" ? "shaky" : g === "bad" ? "missed" : ""; }
 function escapeHTML(s) {
   return String(s).replace(/[&<>"']/g, ch => ({
@@ -722,8 +736,32 @@ function visibleProblems(){
   if (mode === "review") return weakProblems().length ? weakProblems() : problems.filter(isDiagnostic);
   return problems;
 }
+function diagnosticResults(){
+  const done = diagnosticIds.filter(n => state.grades[n]);
+  const secure = diagnosticIds.filter(n => state.grades[n] === "good");
+  const attempted = done.length;
+  const score = attempted ? secure.length / diagnosticIds.length : 0;
+  const pass = score >= PLACEMENT_PASS_RATE;
+  return { attempted, secure: secure.length, total: diagnosticIds.length, score, pass };
+}
+function placementLabel(){
+  const r = diagnosticResults();
+  if (r.attempted < r.total) return `Placement in progress: ${r.attempted}/${r.total} diagnostic problems complete.`;
+  if (r.pass) return `Placement: ready to move beyond pre-algebra (${Math.round(r.score * 100)}%).`;
+  if (r.secure >= 8) return `Placement: late pre-algebra review (${Math.round(r.score * 100)}%). Clean up weak spots before Algebra 1.`;
+  if (r.secure >= 5) return `Placement: core pre-algebra rebuild (${Math.round(r.score * 100)}%).`;
+  return `Placement: foundations rebuild (${Math.round(r.score * 100)}%).`;
+}
 function clusterFor(p){
   const text = `${p.ch} ${p.name} ${p.skill}`.toLowerCase();
+  if (text.includes("integer")) return "Integer operations";
+  if (text.includes("fraction")) return "Fractions";
+  if (text.includes("decimal") || text.includes("percent")) return "Decimals and percents";
+  if (text.includes("order of operations")) return "Order of operations";
+  if (text.includes("ratio")) return "Ratios and rates";
+  if (text.includes("coordinate plane")) return "Coordinate plane";
+  if (text.includes("geometry") || text.includes("area") || text.includes("perimeter")) return "Geometry basics";
+  if (text.includes("mean") || text.includes("median") || text.includes("statistics")) return "Statistics basics";
   if (text.includes("word") || text.includes("rate") || text.includes("coin")) return "Word-problem modeling";
   if (text.includes("quadratic") || text.includes("parabola") || text.includes("vertical")) return "Quadratics";
   if (text.includes("polynomial")) return "Polynomial operations";
@@ -762,6 +800,46 @@ const lessons = {
     teach:"Slow down on representation: convert every value into a comparable form before ordering or classifying.",
     example:"For mixed numbers, radicals, and decimals, approximate only as much as needed to place them on the number line.",
     rebuild:"Do 2 ordering problems with radicals, then one classification-only problem."
+  },
+  "Integer operations": {
+    teach:"Integers are about direction. Treat subtraction as adding the opposite, then decide whether the result moves left or right on the number line.",
+    example:"-18 + 7 - (-5) becomes -18 + 7 + 5. The two positive moves total 12, so you land at -6.",
+    rebuild:"Do three integer problems: one add, one subtract, one mixed expression."
+  },
+  "Fractions": {
+    teach:"Fractions must describe the same-size pieces before you add or subtract them. Find a common denominator first.",
+    example:"3/4 + 5/6 becomes 9/12 + 10/12. Only then add the numerators.",
+    rebuild:"Do two unlike-denominator addition problems, then one subtraction problem."
+  },
+  "Decimals and percents": {
+    teach:"Percent means per 100. Convert to a decimal, then multiply by the whole.",
+    example:"25% of 48 is 0.25 * 48 = 12.",
+    rebuild:"Do one discount, one tax/tip, and one percent-of-number problem."
+  },
+  "Order of operations": {
+    teach:"Use the structure before calculating: parentheses, exponents, multiply/divide, then add/subtract.",
+    example:"6 + 3(8 - 5)^2 starts inside the parentheses, then squares, then multiplies.",
+    rebuild:"Do two expressions with parentheses and exponents before increasing complexity."
+  },
+  "Ratios and rates": {
+    teach:"Ratios scale both quantities by the same factor. Find the multiplier on one side, then use it on the other.",
+    example:"3 cups flour to 12 cups flour is times 4, so 2 cups sugar becomes 8 cups.",
+    rebuild:"Do two equivalent-ratio problems and one unit-rate comparison."
+  },
+  "Coordinate plane": {
+    teach:"Slope is vertical change divided by horizontal change. Write change in y over change in x in the same point order.",
+    example:"From (2,3) to (6,11), slope is (11-3)/(6-2)=8/4=2.",
+    rebuild:"Do two slope-from-points problems, then one graph-reading problem."
+  },
+  "Geometry basics": {
+    teach:"Separate formulas by what they measure: area covers inside space; perimeter wraps around the outside.",
+    example:"A 9 by 4 rectangle has area 9*4 and perimeter 2(9+4).",
+    rebuild:"Do one rectangle, one triangle, and one composite-shape problem."
+  },
+  "Statistics basics": {
+    teach:"Mean balances the data; median is the middle after sorting. Always sort before finding the median.",
+    example:"6,10,4,8,12 sorts to 4,6,8,10,12, so the median is 8.",
+    rebuild:"Do two mean/median sets, including one with an even number of values."
   },
   "Absolute value": {
     teach:"Absolute value splits only after the bars are isolated. For inequalities, remember: greater-than absolute value becomes OR.",
@@ -816,18 +894,20 @@ function renderList(){
 function coachRecommendation(){
   const nextDiag = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
   const weak = weakestCluster();
-  if (mode === "diagnostic" && nextDiag) return `Run diagnostic Problem ${nextDiag.n}: ${nextDiag.name}. Do not teach yet; collect signal first.`;
+  if (mode === "diagnostic" && nextDiag) return `${placementLabel()} Next: diagnostic Problem ${nextDiag.n}: ${nextDiag.name}.`;
+  if (mode === "diagnostic") return placementLabel();
   if (weak) {
     return `Next agent move: teach ${weak.name}. Evidence: ${weak.mid + weak.bad} shaky/missed item(s). Then rebuild and retest.`;
   }
   const nextUnseen = problems.find(p => !state.grades[p.n]);
-  if (nextUnseen) return `Diagnostic looks clean so far. Sample the full packet next, starting with Problem ${nextUnseen.n}.`;
+  if (nextUnseen) return `Diagnostic looks clean so far. Sample the practice ladder next, starting with Problem ${nextUnseen.n}.`;
   return "Clean mission. Schedule a short mixed retention check tomorrow.";
 }
 
 function renderStats(){
   const grades = Object.values(state.grades);
-  $("doneStat").textContent = `${grades.length}/25`;
+  const placement = diagnosticResults();
+  $("doneStat").textContent = mode === "diagnostic" ? `${placement.attempted}/${placement.total}` : `${grades.length}/${problems.length}`;
   $("strongStat").textContent = grades.filter(g => g === "good").length;
   $("coachText").textContent = coachRecommendation();
   $("studentName").value = state.profile?.studentName || "";
@@ -848,10 +928,10 @@ function renderProblem(){
   const cluster = clusterFor(p);
   const weak = weakestCluster();
   const move = mode === "diagnostic"
-    ? "This is a diagnostic item. The goal is not to finish the packet; it is to reveal whether this skill needs teaching."
+    ? `This is a placement item. A 93% pass requires ${diagnosticIds.length}/${diagnosticIds.length} secure on this 10-problem diagnostic.`
     : mode === "review"
       ? "This is a reteach/rebuild item selected because the skill cluster showed weakness."
-      : "This is a source-packet item. Use it only after the diagnostic and reteach loop.";
+      : "This is a practice-ladder item. Use it after the diagnostic and reteach loop.";
   $("missionMove").style.display = "";
   $("missionMove").innerHTML = `<b>Agent policy: ${cluster}</b>${move}`;
   const lesson = lessons[weak?.name || cluster];
@@ -871,10 +951,17 @@ function renderSummary(){
   const mid = grades.filter(g => g === "mid").length;
   const bad = grades.filter(g => g === "bad").length;
   const diagDone = diagnosticIds.filter(n => state.grades[n]).length;
+  const placement = diagnosticResults();
   const weak = weakestCluster();
-  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${25 - grades.length}</b> not attempted.</p>
+  const nextAction = placement.pass && !weak
+    ? "Pre-algebra placement is clear. Start the Algebra 1 ladder next."
+    : weak
+      ? `Teach ${weak.name}, then rebuild and retest.`
+      : "Continue diagnostic sampling or run a mixed retention check.";
+  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${problems.length - grades.length}</b> not attempted.</p>
     <p><b>Diagnostic pass:</b> ${diagDone}/${diagnosticIds.length} complete.</p>
-    <p><b>Recommended next action:</b> ${weak ? `Teach ${weak.name}, then rebuild and retest.` : "Continue diagnostic sampling or run a mixed retention check."}</p>`;
+    <p><b>${escapeHTML(placementLabel())}</b> Passing this level requires ${Math.round(PLACEMENT_PASS_RATE * 100)}% secure.</p>
+    <p><b>Recommended next action:</b> ${nextAction}</p>`;
   const stats = Object.entries(clusterStats())
     .map(([name,s]) => ({name, ...s, risk:s.bad*2+s.mid}))
     .sort((a,b) => b.risk - a.risk || a.name.localeCompare(b.name));
@@ -893,9 +980,21 @@ function renderModeButtons(){
   $("summaryView").classList.toggle("show", mode === "summary");
 }
 
+function ensureVisibleCurrent(){
+  if (mode === "summary") return;
+  const visible = visibleProblems();
+  if (!visible.some(p => p.n === state.current)) {
+    const next = mode === "diagnostic"
+      ? visible.find(p => !state.grades[p.n]) || visible[0]
+      : visible[0];
+    if (next) state.current = next.n;
+  }
+}
+
 function render(){
   document.querySelector(".app").classList.toggle("workFocus", !!state.focusWork);
   $("focusBtn").textContent = state.focusWork ? "Exit big work" : "Big work area";
+  ensureVisibleCurrent();
   renderModeButtons();
   renderList();
   renderStats();
@@ -911,10 +1010,17 @@ function goNext(){
     state.current = next?.n || diag[(diag.findIndex(p => p.n === state.current) + 1) % diag.length].n;
   } else if (mode === "review") {
     const weak = weakProblems();
-    const idx = weak.findIndex(p => p.n === state.current);
-    state.current = weak[(idx + 1) % weak.length]?.n || state.current;
+    if (weak.length) {
+      const idx = weak.findIndex(p => p.n === state.current);
+      state.current = weak[(idx + 1) % weak.length]?.n || weak[0].n;
+    } else {
+      const diag = problems.filter(isDiagnostic);
+      const idx = diag.findIndex(p => p.n === state.current);
+      state.current = diag[(idx + 1) % diag.length]?.n || diag[0].n;
+    }
   } else {
-    state.current = state.current >= 25 ? 1 : state.current + 1;
+    const idx = problems.findIndex(p => p.n === state.current);
+    state.current = problems[(idx + 1) % problems.length]?.n || problems[0].n;
   }
   save();
   clearCanvas();
