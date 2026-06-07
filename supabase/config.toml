@@ -1,0 +1,15 @@
+project_id = "reps"
+
+# stripe-webhook is called by Stripe with a signature header, not a user JWT.
+# Signature is verified in-function via STRIPE_WEBHOOK_SECRET.
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.account]
+verify_jwt = true
+
+[functions.analyze-work]
+verify_jwt = true
+
+[functions.generate-retest]
+verify_jwt = true
