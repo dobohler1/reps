@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.07.1 · pre-algebra diagnostic</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.1 · direct work check</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -653,7 +653,9 @@ function exitRetest(){
 }
 
 function normalButtons(){
-  ["checkBtn","nextRetestBtn","exitRetestBtn"].forEach(id => $(id).style.display = "none");
+  ["nextRetestBtn","exitRetestBtn"].forEach(id => $(id).style.display = "none");
+  $("checkBtn").style.display = "";
+  $("checkBtn").textContent = "Check my work";
   $("showSolution").style.display = ""; $("nextBtn").style.display = "";
   document.querySelectorAll(".grade").forEach(b => b.style.display = "");
   $("retestBanner").style.display = "none";
@@ -1029,7 +1031,11 @@ function goNext(){
 
 $("showSolution").onclick = () => $("solutionBox").classList.add("show");
 $("nextBtn").onclick = goNext;
-$("checkBtn").onclick = checkRetest;
+$("checkBtn").onclick = () => {
+  if (retest) return checkRetest();
+  const p = currentProblem();
+  runDiagnosis(p, "check");
+};
 $("nextRetestBtn").onclick = nextRetestProblem;
 $("exitRetestBtn").onclick = exitRetest;
 document.querySelectorAll(".grade").forEach(b => b.onclick = async () => {
