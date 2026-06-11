@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.3 · next after check</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.4 · readable red notes</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -1090,6 +1090,58 @@ const markCanvas = $("markCanvas");
 const mctx = markCanvas.getContext("2d");
 
 function clearMarks(){ if (mctx) mctx.clearRect(0,0,markCanvas.width,markCanvas.height); }
+function cleanMarkNote(note){
+  return String(note || "")
+    .replace(/−/g, "-")
+    .replace(/÷/g, " / ")
+    .replace(/should\s*be/gi, "should be")
+    .replace(/([A-Za-z])([+\-*/=])/g, "$1 $2")
+    .replace(/([+\-*/=])([A-Za-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 42);
+}
+function wrapMarkNote(ctx, text, maxWidth){
+  const words = cleanMarkNote(text).split(" ").filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth || !line) line = next;
+    else { lines.push(line); line = word; }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 2);
+}
+function drawMarkLabel(ctx, note, x, y, maxX, maxY){
+  const lines = wrapMarkNote(ctx, note, 250);
+  if (!lines.length) return;
+  const padX = 10, padY = 8, lineH = 26;
+  const width = Math.min(280, Math.max(...lines.map(line => ctx.measureText(line).width)) + padX * 2);
+  const height = lines.length * lineH + padY * 2;
+  const lx = Math.max(4, Math.min(x, maxX - width - 4));
+  const ly = Math.max(4, Math.min(y, maxY - height - 4));
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.96)";
+  ctx.strokeStyle = "#e0245e";
+  ctx.lineWidth = 3;
+  const r = 10;
+  ctx.beginPath();
+  ctx.moveTo(lx + r, ly);
+  ctx.lineTo(lx + width - r, ly);
+  ctx.quadraticCurveTo(lx + width, ly, lx + width, ly + r);
+  ctx.lineTo(lx + width, ly + height - r);
+  ctx.quadraticCurveTo(lx + width, ly + height, lx + width - r, ly + height);
+  ctx.lineTo(lx + r, ly + height);
+  ctx.quadraticCurveTo(lx, ly + height, lx, ly + height - r);
+  ctx.lineTo(lx, ly + r);
+  ctx.quadraticCurveTo(lx, ly, lx + r, ly);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#e0245e";
+  lines.forEach((line, i) => ctx.fillText(line, lx + padX, ly + padY + 20 + i * lineH));
+  ctx.restore();
+}
 // Render teacher-style red-pen markup from normalized (0-1) coordinates.
 function drawMarks(marks){
   clearMarks();
@@ -1107,11 +1159,10 @@ function drawMarks(marks){
     else if (m.type==="check"){ const k=x-12; c.beginPath(); c.moveTo(k-26,cy+2); c.lineTo(k-14,cy+16); c.lineTo(k+6,cy-18); c.stroke(); }
     else if (m.type==="arrow"){ const tx=x+w+8, ta=Math.min(x+w+120,W-12); c.beginPath(); c.moveTo(ta,cy); c.lineTo(tx,cy); c.stroke(); c.beginPath(); c.moveTo(tx,cy); c.lineTo(tx+16,cy-8); c.lineTo(tx+16,cy+8); c.closePath(); c.fill(); }
     if (m.note){
-      c.font="bold 24px -apple-system,BlinkMacSystemFont,sans-serif";
-      let nx = (m.type==="check") ? x+w+10 : Math.min(x+w+18, W-280); if (nx<4) nx=4;
-      const ny = (m.type==="circle"||m.type==="strike") ? Math.min(y+h+34, H-8) : cy+8;
-      c.lineWidth=6; c.strokeStyle="rgba(255,255,255,0.95)"; c.strokeText(m.note, nx, ny);
-      c.fillStyle=RED; c.fillText(m.note, nx, ny);
+      c.font="bold 22px -apple-system,BlinkMacSystemFont,sans-serif";
+      let nx = (m.type==="check") ? x+w+10 : x+w+16; if (nx<4) nx=4;
+      const ny = (m.type==="circle"||m.type==="strike") ? y+h+18 : cy+12;
+      drawMarkLabel(c, m.note, nx, ny, W, H);
     }
   }
 }
