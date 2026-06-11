@@ -262,7 +262,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.7 · track toggle</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.8 · algebra diagnostic</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -358,8 +358,9 @@ const problems = [
 {n:35, ch:"Pre-Algebra — Statistics", name:"Mean and median", skill:"Find mean and median from a small data set.", q:"For the data set 6, 10, 4, 8, 12, find the mean and the median.", sol:"Order the data: 4, 6, 8, 10, 12.\nMedian is the middle value: 8.\nMean = (6 + 10 + 4 + 8 + 12) / 5 = 40 / 5 = 8.\nAnswer: mean = 8, median = 8."}
 ];
 
-const diagnosticIds = [26,27,28,29,30,31,32,33,34,35];
-const preAlgebraIds = diagnosticIds;
+const preAlgebraDiagnosticIds = [26,27,28,29,30,31,32,33,34,35];
+const algebraDiagnosticIds = [2,5,7,9,11,14,17,20,22,24];
+const preAlgebraIds = preAlgebraDiagnosticIds;
 const algebraIds = problems.filter(p => p.n < 26).map(p => p.n);
 const PLACEMENT_PASS_RATE = 0.93;
 const key = "adaptive_exam_mission_builder_v1";
@@ -753,7 +754,13 @@ function escapeHTML(s) {
 function formatMathText(raw) {
   return escapeHTML(raw).replace(/\n/g, "<br>");
 }
-function isDiagnostic(p){ return diagnosticIds.includes(p.n); }
+function activeDiagnosticIds(){
+  return state.track === "algebra" ? algebraDiagnosticIds : preAlgebraDiagnosticIds;
+}
+function trackLabel(){
+  return state.track === "algebra" ? "Algebra 1" : "Pre-algebra";
+}
+function isDiagnostic(p){ return activeDiagnosticIds().includes(p.n); }
 function trackIds(){
   return state.track === "algebra" ? algebraIds : preAlgebraIds;
 }
@@ -768,16 +775,23 @@ function visibleProblems(){
 }
 function diagnosticProblems(){ return problems.filter(isDiagnostic); }
 function diagnosticResults(){
-  const done = diagnosticIds.filter(n => state.grades[n]);
-  const secure = diagnosticIds.filter(n => state.grades[n] === "good");
+  const ids = activeDiagnosticIds();
+  const done = ids.filter(n => state.grades[n]);
+  const secure = ids.filter(n => state.grades[n] === "good");
   const attempted = done.length;
-  const score = attempted ? secure.length / diagnosticIds.length : 0;
+  const score = attempted ? secure.length / ids.length : 0;
   const pass = score >= PLACEMENT_PASS_RATE;
-  return { attempted, secure: secure.length, total: diagnosticIds.length, score, pass };
+  return { attempted, secure: secure.length, total: ids.length, score, pass };
 }
 function placementLabel(){
   const r = diagnosticResults();
   if (r.attempted < r.total) return `Placement in progress: ${r.attempted}/${r.total} diagnostic problems complete.`;
+  if (state.track === "algebra") {
+    if (r.pass) return `Placement: Algebra 1 secure (${Math.round(r.score * 100)}%).`;
+    if (r.secure >= 8) return `Placement: late Algebra 1 review (${Math.round(r.score * 100)}%). Clean up weak spots before moving on.`;
+    if (r.secure >= 5) return `Placement: core Algebra 1 rebuild (${Math.round(r.score * 100)}%).`;
+    return `Placement: Algebra foundations rebuild (${Math.round(r.score * 100)}%).`;
+  }
   if (r.pass) return `Placement: ready to move beyond pre-algebra (${Math.round(r.score * 100)}%).`;
   if (r.secure >= 8) return `Placement: late pre-algebra review (${Math.round(r.score * 100)}%). Clean up weak spots before Algebra 1.`;
   if (r.secure >= 5) return `Placement: core pre-algebra rebuild (${Math.round(r.score * 100)}%).`;
@@ -936,7 +950,7 @@ function coachRecommendation(){
 }
 
 function renderStats(){
-  const diagnosticGrades = diagnosticIds.map(n => state.grades[n]).filter(Boolean);
+  const diagnosticGrades = activeDiagnosticIds().map(n => state.grades[n]).filter(Boolean);
   const trackGrades = trackIds().map(n => state.grades[n]).filter(Boolean);
   const placement = diagnosticResults();
   $("doneStat").textContent = mode === "packet" ? `${trackGrades.length}/${trackIds().length}` : `${placement.attempted}/${placement.total}`;
@@ -960,7 +974,7 @@ function renderProblem(){
   const cluster = clusterFor(p);
   const weak = weakestCluster(diagnosticProblems());
   const move = mode === "diagnostic"
-    ? `This is a placement item. A 93% pass requires ${diagnosticIds.length}/${diagnosticIds.length} secure on this 10-problem diagnostic.`
+    ? `${trackLabel()} placement item. A 93% pass requires ${activeDiagnosticIds().length}/${activeDiagnosticIds().length} secure on this 10-problem diagnostic.`
     : mode === "review"
       ? "This is a reteach/rebuild item selected because the skill cluster showed weakness."
       : "This is a practice-ladder item. Use it after the diagnostic and reteach loop.";
@@ -978,20 +992,21 @@ function renderProblem(){
 }
 
 function renderSummary(){
-  const grades = diagnosticIds.map(n => state.grades[n]).filter(Boolean);
+  const ids = activeDiagnosticIds();
+  const grades = ids.map(n => state.grades[n]).filter(Boolean);
   const good = grades.filter(g => g === "good").length;
   const mid = grades.filter(g => g === "mid").length;
   const bad = grades.filter(g => g === "bad").length;
-  const diagDone = diagnosticIds.filter(n => state.grades[n]).length;
+  const diagDone = ids.filter(n => state.grades[n]).length;
   const placement = diagnosticResults();
   const weak = weakestCluster();
   const nextAction = placement.pass && !weak
-    ? "Pre-algebra placement is clear. Start the Algebra 1 ladder next."
+    ? `${trackLabel()} placement is clear. Start the practice ladder next.`
     : weak
       ? `Teach ${weak.name}, then rebuild and retest.`
       : "Continue diagnostic sampling or run a mixed retention check.";
-  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${diagnosticIds.length - grades.length}</b> not attempted.</p>
-    <p><b>Diagnostic pass:</b> ${diagDone}/${diagnosticIds.length} complete.</p>
+  $("summaryText").innerHTML = `<p><b>${trackLabel()} diagnostic:</b> <b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${ids.length - grades.length}</b> not attempted.</p>
+    <p><b>Diagnostic pass:</b> ${diagDone}/${ids.length} complete.</p>
     <p><b>${escapeHTML(placementLabel())}</b> Passing this level requires ${Math.round(PLACEMENT_PASS_RATE * 100)}% secure.</p>
     <p><b>Recommended next action:</b> ${nextAction}</p>`;
   const stats = Object.entries(clusterStats(diagnosticProblems()))
@@ -1062,6 +1077,17 @@ function goNext(){
   render();
 }
 
+function switchTrack(track){
+  retest = null;
+  state.track = track;
+  if (mode === "summary") mode = "diagnostic";
+  const visible = visibleProblems();
+  const next = visible.find(p => !state.grades[p.n]) || visible[0];
+  if (next) state.current = next.n;
+  save();
+  render();
+}
+
 $("showSolution").onclick = () => $("solutionBox").classList.add("show");
 $("nextBtn").onclick = goNext;
 $("checkBtn").onclick = () => {
@@ -1085,7 +1111,7 @@ $("modePractice").onclick = () => {
   retest = null; mode = "diagnostic";
   const next = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
   if (next) state.current = next.n;
-  render();
+  save(); render();
 };
 $("modeReview").onclick = () => {
   retest = null; mode = "review";
@@ -1095,16 +1121,8 @@ $("modeReview").onclick = () => {
 };
 $("modePacket").onclick = () => { retest = null; mode = "packet"; render(); };
 $("modeSummary").onclick = () => { retest = null; mode = "summary"; render(); };
-$("trackPre").onclick = () => {
-  retest = null; mode = "packet"; state.track = "prealgebra";
-  state.current = trackProblems().find(p => !state.grades[p.n])?.n || preAlgebraIds[0];
-  save(); render();
-};
-$("trackAlg").onclick = () => {
-  retest = null; mode = "packet"; state.track = "algebra";
-  state.current = trackProblems().find(p => !state.grades[p.n])?.n || algebraIds[0];
-  save(); render();
-};
+$("trackPre").onclick = () => switchTrack("prealgebra");
+$("trackAlg").onclick = () => switchTrack("algebra");
 $("brandFocus").onclick = () => { state.focusWork = true; save(); render(); };
 $("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); render(); };
 $("saveProfile").onclick = () => {
