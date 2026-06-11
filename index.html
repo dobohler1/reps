@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.4 · readable red notes</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.5 · persisted placement score</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -482,7 +482,13 @@ async function runDiagnosis(p, g){
   try { res = await callDiagnose(p, g, img); } catch(e){ res = { error:true }; }
   if (res && res.gated) diagnoses[p.n] = { gated: res.need };
   else if (!res || !res.ok) diagnoses[p.n] = { error:true };
-  else diagnoses[p.n] = res;
+  else {
+    diagnoses[p.n] = res;
+    if (g === "check") {
+      state.grades[p.n] = res.reached_correct_answer ? "good" : "bad";
+      save();
+    }
+  }
   render();
 }
 
@@ -738,6 +744,7 @@ function visibleProblems(){
   if (mode === "review") return weakProblems().length ? weakProblems() : problems.filter(isDiagnostic);
   return problems;
 }
+function diagnosticProblems(){ return problems.filter(isDiagnostic); }
 function diagnosticResults(){
   const done = diagnosticIds.filter(n => state.grades[n]);
   const secure = diagnosticIds.filter(n => state.grades[n] === "good");
@@ -774,12 +781,12 @@ function clusterFor(p){
   if (text.includes("equation") || text.includes("proportion")) return "Equations and proportions";
   return "Foundations";
 }
-function weakProblems(){
-  return problems.filter(p => state.grades[p.n] === "bad" || state.grades[p.n] === "mid");
+function weakProblems(items = diagnosticProblems()){
+  return items.filter(p => state.grades[p.n] === "bad" || state.grades[p.n] === "mid");
 }
-function clusterStats(){
+function clusterStats(items = diagnosticProblems()){
   const stats = {};
-  for (const p of problems) {
+  for (const p of items) {
     const g = state.grades[p.n];
     if (!g) continue;
     const c = clusterFor(p);
@@ -790,8 +797,8 @@ function clusterStats(){
   }
   return stats;
 }
-function weakestCluster(){
-  const stats = clusterStats();
+function weakestCluster(items = diagnosticProblems()){
+  const stats = clusterStats(items);
   return Object.entries(stats)
     .map(([name,s]) => ({name, ...s, risk: s.bad * 2 + s.mid}))
     .filter(s => s.risk > 0)
@@ -895,7 +902,7 @@ function renderList(){
 
 function coachRecommendation(){
   const nextDiag = problems.find(p => isDiagnostic(p) && !state.grades[p.n]);
-  const weak = weakestCluster();
+  const weak = weakestCluster(diagnosticProblems());
   if (mode === "diagnostic" && nextDiag) return `${placementLabel()} Next: diagnostic Problem ${nextDiag.n}: ${nextDiag.name}.`;
   if (mode === "diagnostic") return placementLabel();
   if (weak) {
@@ -907,10 +914,11 @@ function coachRecommendation(){
 }
 
 function renderStats(){
-  const grades = Object.values(state.grades);
+  const diagnosticGrades = diagnosticIds.map(n => state.grades[n]).filter(Boolean);
+  const allGrades = Object.values(state.grades);
   const placement = diagnosticResults();
-  $("doneStat").textContent = mode === "diagnostic" ? `${placement.attempted}/${placement.total}` : `${grades.length}/${problems.length}`;
-  $("strongStat").textContent = grades.filter(g => g === "good").length;
+  $("doneStat").textContent = mode === "packet" ? `${allGrades.length}/${problems.length}` : `${placement.attempted}/${placement.total}`;
+  $("strongStat").textContent = (mode === "packet" ? allGrades : diagnosticGrades).filter(g => g === "good").length;
   $("coachText").textContent = coachRecommendation();
   $("studentName").value = state.profile?.studentName || "";
   $("parentEmail").value = state.profile?.parentEmail || "";
@@ -928,7 +936,7 @@ function renderProblem(){
   $("prompt").innerHTML = formatMathText(p.q);
   $("attr").textContent = p.skill;
   const cluster = clusterFor(p);
-  const weak = weakestCluster();
+  const weak = weakestCluster(diagnosticProblems());
   const move = mode === "diagnostic"
     ? `This is a placement item. A 93% pass requires ${diagnosticIds.length}/${diagnosticIds.length} secure on this 10-problem diagnostic.`
     : mode === "review"
@@ -948,7 +956,7 @@ function renderProblem(){
 }
 
 function renderSummary(){
-  const grades = Object.values(state.grades);
+  const grades = diagnosticIds.map(n => state.grades[n]).filter(Boolean);
   const good = grades.filter(g => g === "good").length;
   const mid = grades.filter(g => g === "mid").length;
   const bad = grades.filter(g => g === "bad").length;
@@ -960,11 +968,11 @@ function renderSummary(){
     : weak
       ? `Teach ${weak.name}, then rebuild and retest.`
       : "Continue diagnostic sampling or run a mixed retention check.";
-  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${problems.length - grades.length}</b> not attempted.</p>
+  $("summaryText").innerHTML = `<p><b>${good}</b> secure, <b>${mid}</b> shaky, <b>${bad}</b> missed, <b>${diagnosticIds.length - grades.length}</b> not attempted.</p>
     <p><b>Diagnostic pass:</b> ${diagDone}/${diagnosticIds.length} complete.</p>
     <p><b>${escapeHTML(placementLabel())}</b> Passing this level requires ${Math.round(PLACEMENT_PASS_RATE * 100)}% secure.</p>
     <p><b>Recommended next action:</b> ${nextAction}</p>`;
-  const stats = Object.entries(clusterStats())
+  const stats = Object.entries(clusterStats(diagnosticProblems()))
     .map(([name,s]) => ({name, ...s, risk:s.bad*2+s.mid}))
     .sort((a,b) => b.risk - a.risk || a.name.localeCompare(b.name));
   $("skillList").innerHTML = stats.length ? stats.map(s => {
@@ -1011,7 +1019,7 @@ function goNext(){
     const idx = diag.findIndex(p => p.n === state.current);
     state.current = diag[(idx + 1) % diag.length]?.n || diag[0].n;
   } else if (mode === "review") {
-    const weak = weakProblems();
+    const weak = weakProblems(diagnosticProblems());
     if (weak.length) {
       const idx = weak.findIndex(p => p.n === state.current);
       state.current = weak[(idx + 1) % weak.length]?.n || weak[0].n;
@@ -1056,7 +1064,7 @@ $("modePractice").onclick = () => {
 };
 $("modeReview").onclick = () => {
   retest = null; mode = "review";
-  const weak = weakProblems()[0];
+  const weak = weakProblems(diagnosticProblems())[0];
   if (weak) state.current = weak.n;
   save(); render();
 };
