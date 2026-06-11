@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.5 · persisted placement score</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.6 · bounded red callouts</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -1099,15 +1099,17 @@ const mctx = markCanvas.getContext("2d");
 
 function clearMarks(){ if (mctx) mctx.clearRect(0,0,markCanvas.width,markCanvas.height); }
 function cleanMarkNote(note){
-  return String(note || "")
+  const cleaned = String(note || "")
     .replace(/−/g, "-")
     .replace(/÷/g, " / ")
     .replace(/should\s*be/gi, "should be")
     .replace(/([A-Za-z])([+\-*/=])/g, "$1 $2")
     .replace(/([+\-*/=])([A-Za-z])/g, "$1 $2")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 42);
+    .trim();
+  if (cleaned.length <= 36) return cleaned;
+  const clipped = cleaned.slice(0, 33).replace(/\s+\S*$/, "");
+  return (clipped || cleaned.slice(0, 33)).trim() + "...";
 }
 function wrapMarkNote(ctx, text, maxWidth){
   const words = cleanMarkNote(text).split(" ").filter(Boolean);
@@ -1121,33 +1123,64 @@ function wrapMarkNote(ctx, text, maxWidth){
   if (line) lines.push(line);
   return lines.slice(0, 2);
 }
-function drawMarkLabel(ctx, note, x, y, maxX, maxY){
-  const lines = wrapMarkNote(ctx, note, 250);
+function roundedRectPath(ctx, x, y, width, height, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+function overlaps(a, b){
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function drawMarkNumber(ctx, n, x, y){
+  ctx.save();
+  ctx.fillStyle = "#e0245e";
+  ctx.beginPath();
+  ctx.arc(x, y, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 20px -apple-system,BlinkMacSystemFont,sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(n), x, y + 1);
+  ctx.restore();
+}
+function drawMarkLabel(ctx, n, note, mark, maxX, maxY, placed){
+  const lines = wrapMarkNote(ctx, note, 205);
   if (!lines.length) return;
-  const padX = 10, padY = 8, lineH = 26;
-  const width = Math.min(280, Math.max(...lines.map(line => ctx.measureText(line).width)) + padX * 2);
+  const padX = 10, padY = 7, lineH = 23;
+  const width = Math.min(240, Math.max(...lines.map(line => ctx.measureText(line).width)) + padX * 2 + 24);
   const height = lines.length * lineH + padY * 2;
-  const lx = Math.max(4, Math.min(x, maxX - width - 4));
-  const ly = Math.max(4, Math.min(y, maxY - height - 4));
+  const rightSpace = maxX - (mark.x + mark.w);
+  const leftSpace = mark.x;
+  let lx = rightSpace >= width + 18 || rightSpace >= leftSpace ? mark.x + mark.w + 14 : mark.x - width - 14;
+  let ly = mark.y + mark.h + 10;
+  lx = Math.max(6, Math.min(lx, maxX - width - 6));
+  ly = Math.max(6, Math.min(ly, maxY - height - 6));
+  let box = { x:lx, y:ly, w:width, h:height };
+  for (let i = 0; i < 8 && placed.some(prev => overlaps(box, prev)); i++) {
+    box.y = Math.min(maxY - height - 6, box.y + height + 6);
+    if (i === 4) box.y = Math.max(6, mark.y - height - 10);
+  }
+  placed.push(box);
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.96)";
   ctx.strokeStyle = "#e0245e";
-  ctx.lineWidth = 3;
-  const r = 10;
-  ctx.beginPath();
-  ctx.moveTo(lx + r, ly);
-  ctx.lineTo(lx + width - r, ly);
-  ctx.quadraticCurveTo(lx + width, ly, lx + width, ly + r);
-  ctx.lineTo(lx + width, ly + height - r);
-  ctx.quadraticCurveTo(lx + width, ly + height, lx + width - r, ly + height);
-  ctx.lineTo(lx + r, ly + height);
-  ctx.quadraticCurveTo(lx, ly + height, lx, ly + height - r);
-  ctx.lineTo(lx, ly + r);
-  ctx.quadraticCurveTo(lx, ly, lx + r, ly);
+  ctx.lineWidth = 2.5;
+  roundedRectPath(ctx, box.x, box.y, box.w, box.h, 9);
   ctx.fill();
   ctx.stroke();
+  drawMarkNumber(ctx, n, box.x + 16, box.y + height / 2);
   ctx.fillStyle = "#e0245e";
-  lines.forEach((line, i) => ctx.fillText(line, lx + padX, ly + padY + 20 + i * lineH));
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  lines.forEach((line, i) => ctx.fillText(line, box.x + padX + 24, box.y + padY + 18 + i * lineH));
   ctx.restore();
 }
 // Render teacher-style red-pen markup from normalized (0-1) coordinates.
@@ -1157,20 +1190,21 @@ function drawMarks(marks){
   markCanvas.style.display="block";
   const W=markCanvas.width, H=markCanvas.height, c=mctx, RED="#e0245e";
   c.lineCap="round"; c.lineJoin="round";
-  for (const m of marks){
-    const x=(m.x||0)*W, y=(m.y||0)*H, w=Math.max(m.w||0.08,0.02)*W, h=Math.max(m.h||0.05,0.03)*H;
+  const placedLabels = [];
+  for (const [i, m] of marks.entries()){
+    const w=Math.max(Math.min(m.w||0.08,0.42),0.035)*W, h=Math.max(Math.min(m.h||0.05,0.3),0.035)*H;
+    const x=Math.max(24, Math.min((m.x||0)*W, W-w-24)), y=Math.max(24, Math.min((m.y||0)*H, H-h-24));
     const cx=x+w/2, cy=y+h/2;
     c.strokeStyle=RED; c.fillStyle=RED; c.lineWidth=5;
     if (m.type==="circle"){ c.beginPath(); c.ellipse(cx,cy,w/2+12,h/2+12,0,0,Math.PI*2); c.stroke(); }
     else if (m.type==="strike"){ c.beginPath(); c.moveTo(x-4,cy); c.lineTo(x+w+4,cy); c.stroke(); }
     else if (m.type==="underline"){ c.beginPath(); c.moveTo(x-4,y+h+6); c.lineTo(x+w+4,y+h+6); c.stroke(); }
-    else if (m.type==="check"){ const k=x-12; c.beginPath(); c.moveTo(k-26,cy+2); c.lineTo(k-14,cy+16); c.lineTo(k+6,cy-18); c.stroke(); }
-    else if (m.type==="arrow"){ const tx=x+w+8, ta=Math.min(x+w+120,W-12); c.beginPath(); c.moveTo(ta,cy); c.lineTo(tx,cy); c.stroke(); c.beginPath(); c.moveTo(tx,cy); c.lineTo(tx+16,cy-8); c.lineTo(tx+16,cy+8); c.closePath(); c.fill(); }
+    else if (m.type==="check"){ const k=Math.max(36,x-12); c.beginPath(); c.moveTo(k-26,cy+2); c.lineTo(k-14,cy+16); c.lineTo(k+6,cy-18); c.stroke(); }
+    else if (m.type==="arrow"){ const tx=Math.min(x+w+8,W-32), ta=Math.min(x+w+105,W-12); c.beginPath(); c.moveTo(ta,cy); c.lineTo(tx,cy); c.stroke(); c.beginPath(); c.moveTo(tx,cy); c.lineTo(tx+14,cy-8); c.lineTo(tx+14,cy+8); c.closePath(); c.fill(); }
     if (m.note){
-      c.font="bold 22px -apple-system,BlinkMacSystemFont,sans-serif";
-      let nx = (m.type==="check") ? x+w+10 : x+w+16; if (nx<4) nx=4;
-      const ny = (m.type==="circle"||m.type==="strike") ? y+h+18 : cy+12;
-      drawMarkLabel(c, m.note, nx, ny, W, H);
+      c.font="bold 18px -apple-system,BlinkMacSystemFont,sans-serif";
+      drawMarkNumber(c, i + 1, Math.min(W-22, Math.max(22, x + w + 12)), Math.max(22, y - 8));
+      drawMarkLabel(c, i + 1, m.note, {x,y,w,h}, W, H, placedLabels);
     }
   }
 }
