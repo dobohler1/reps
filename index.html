@@ -94,6 +94,12 @@ button, input, select { font:inherit; -webkit-user-select:none; user-select:none
   border:0; border-radius:8px; padding:8px 12px; color:#334155; background:transparent; cursor:pointer;
 }
 .seg button.on { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(15,23,42,.12); }
+.trackSeg { display:flex; background:#edf2fb; padding:4px; border-radius:999px; gap:4px; }
+.trackSeg button {
+  border:0; border-radius:999px; padding:7px 10px; color:#334155; background:transparent;
+  cursor:pointer; font-size:12px; font-weight:800;
+}
+.trackSeg button.on { background:#fff; color:#1d4ed8; box-shadow:0 1px 3px rgba(15,23,42,.12); }
 .timer { color:#475467; font-weight:700; }
 .buildInfo {
   color:#475467; font-weight:800; font-size:12px; background:#fff;
@@ -249,10 +255,14 @@ canvas {
         <button id="modePacket">Practice ladder</button>
         <button id="modeSummary">Summary</button>
       </div>
+      <div class="trackSeg" aria-label="Practice track">
+        <button id="trackPre">Pre-Algebra</button>
+        <button id="trackAlg">Algebra 1</button>
+      </div>
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.6 · bounded red callouts</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.7 · track toggle</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -349,12 +359,15 @@ const problems = [
 ];
 
 const diagnosticIds = [26,27,28,29,30,31,32,33,34,35];
+const preAlgebraIds = diagnosticIds;
+const algebraIds = problems.filter(p => p.n < 26).map(p => p.n);
 const PLACEMENT_PASS_RATE = 0.93;
 const key = "adaptive_exam_mission_builder_v1";
 function freshStudentState(profile = {}) {
   return {
     grades: {},
     current: 1,
+    track: "prealgebra",
     focusWork: false,
     profile: {
       studentName: profile.studentName || "",
@@ -380,6 +393,7 @@ appState.profiles[appState.activeProfileId] ||= freshStudentState();
 let state = appState.profiles[appState.activeProfileId];
 state.grades ||= {};
 state.current ||= 1;
+state.track ||= "prealgebra";
 state.focusWork ||= false;
 state.profile ||= { studentName:"", parentEmail:"" };
 let mode = "diagnostic";
@@ -414,6 +428,7 @@ function switchToProfile(profile, fresh=false) {
   appState.activeProfileId = id;
   state = appState.profiles[id];
   state.profile = { ...state.profile, ...profile };
+  state.track ||= "prealgebra";
   save();
   clearSessionTransientState();
   render();
@@ -739,10 +754,17 @@ function formatMathText(raw) {
   return escapeHTML(raw).replace(/\n/g, "<br>");
 }
 function isDiagnostic(p){ return diagnosticIds.includes(p.n); }
+function trackIds(){
+  return state.track === "algebra" ? algebraIds : preAlgebraIds;
+}
+function trackProblems(){
+  const ids = new Set(trackIds());
+  return problems.filter(p => ids.has(p.n));
+}
 function visibleProblems(){
   if (mode === "diagnostic") return problems.filter(isDiagnostic);
   if (mode === "review") return weakProblems().length ? weakProblems() : problems.filter(isDiagnostic);
-  return problems;
+  return trackProblems();
 }
 function diagnosticProblems(){ return problems.filter(isDiagnostic); }
 function diagnosticResults(){
@@ -908,17 +930,17 @@ function coachRecommendation(){
   if (weak) {
     return `Next agent move: teach ${weak.name}. Evidence: ${weak.mid + weak.bad} shaky/missed item(s). Then rebuild and retest.`;
   }
-  const nextUnseen = problems.find(p => !state.grades[p.n]);
+  const nextUnseen = trackProblems().find(p => !state.grades[p.n]);
   if (nextUnseen) return `Diagnostic looks clean so far. Sample the practice ladder next, starting with Problem ${nextUnseen.n}.`;
   return "Clean mission. Schedule a short mixed retention check tomorrow.";
 }
 
 function renderStats(){
   const diagnosticGrades = diagnosticIds.map(n => state.grades[n]).filter(Boolean);
-  const allGrades = Object.values(state.grades);
+  const trackGrades = trackIds().map(n => state.grades[n]).filter(Boolean);
   const placement = diagnosticResults();
-  $("doneStat").textContent = mode === "packet" ? `${allGrades.length}/${problems.length}` : `${placement.attempted}/${placement.total}`;
-  $("strongStat").textContent = (mode === "packet" ? allGrades : diagnosticGrades).filter(g => g === "good").length;
+  $("doneStat").textContent = mode === "packet" ? `${trackGrades.length}/${trackIds().length}` : `${placement.attempted}/${placement.total}`;
+  $("strongStat").textContent = (mode === "packet" ? trackGrades : diagnosticGrades).filter(g => g === "good").length;
   $("coachText").textContent = coachRecommendation();
   $("studentName").value = state.profile?.studentName || "";
   $("parentEmail").value = state.profile?.parentEmail || "";
@@ -986,6 +1008,8 @@ function renderModeButtons(){
   $("modeReview").classList.toggle("on", mode === "review");
   $("modePacket").classList.toggle("on", mode === "packet");
   $("modeSummary").classList.toggle("on", mode === "summary");
+  $("trackPre").classList.toggle("on", state.track !== "algebra");
+  $("trackAlg").classList.toggle("on", state.track === "algebra");
   $("practiceView").style.display = mode === "summary" ? "none" : "grid";
   $("summaryView").classList.toggle("show", mode === "summary");
 }
@@ -1029,8 +1053,9 @@ function goNext(){
       state.current = diag[(idx + 1) % diag.length]?.n || diag[0].n;
     }
   } else {
-    const idx = problems.findIndex(p => p.n === state.current);
-    state.current = problems[(idx + 1) % problems.length]?.n || problems[0].n;
+    const ladder = trackProblems();
+    const idx = ladder.findIndex(p => p.n === state.current);
+    state.current = ladder[(idx + 1) % ladder.length]?.n || ladder[0].n;
   }
   save();
   clearCanvas();
@@ -1070,6 +1095,16 @@ $("modeReview").onclick = () => {
 };
 $("modePacket").onclick = () => { retest = null; mode = "packet"; render(); };
 $("modeSummary").onclick = () => { retest = null; mode = "summary"; render(); };
+$("trackPre").onclick = () => {
+  retest = null; mode = "packet"; state.track = "prealgebra";
+  state.current = trackProblems().find(p => !state.grades[p.n])?.n || preAlgebraIds[0];
+  save(); render();
+};
+$("trackAlg").onclick = () => {
+  retest = null; mode = "packet"; state.track = "algebra";
+  state.current = trackProblems().find(p => !state.grades[p.n])?.n || algebraIds[0];
+  save(); render();
+};
 $("brandFocus").onclick = () => { state.focusWork = true; save(); render(); };
 $("focusBtn").onclick = () => { state.focusWork = !state.focusWork; save(); render(); };
 $("saveProfile").onclick = () => {
