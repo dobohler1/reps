@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.1 · direct work check</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.2 · focused diagnostic list</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -882,11 +882,11 @@ const lessons = {
 
 function renderList(){
   const list = $("problemList");
-  list.innerHTML = problems.map(p => {
+  const items = visibleProblems();
+  list.innerHTML = items.map(p => {
     const g = state.grades[p.n];
-    const hidden = !visibleProblems().some(v => v.n === p.n);
     const cls = ["pbtn", p.n === state.current ? "active" : "", g ? "done" : "", g === "good" ? "good" : (g ? "bad" : "")].join(" ");
-    return `<button class="${cls}" data-n="${p.n}" style="${hidden ? 'opacity:.42' : ''}">
+    return `<button class="${cls}" data-n="${p.n}">
       <span class="pnum">${p.n}</span><span class="ptitle">${p.name}${isDiagnostic(p) ? '<span class="diagTag">diagnostic</span>' : ''}</span><span class="badge">${gradeLabel(g)}</span>
     </button>`;
   }).join("");
