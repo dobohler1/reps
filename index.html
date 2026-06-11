@@ -252,7 +252,7 @@ canvas {
       <div class="topMeta">
         <button class="focusBtn" id="focusBtn">Big work area</button>
         <button class="focusBtn" id="refreshAccess">Refresh access</button>
-        <div class="buildInfo" id="buildInfo">v2026.06.10.2 · focused diagnostic list</div>
+        <div class="buildInfo" id="buildInfo">v2026.06.10.3 · next after check</div>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -1008,8 +1008,8 @@ function render(){
 function goNext(){
   if (mode === "diagnostic") {
     const diag = problems.filter(isDiagnostic);
-    const next = diag.find(p => !state.grades[p.n]);
-    state.current = next?.n || diag[(diag.findIndex(p => p.n === state.current) + 1) % diag.length].n;
+    const idx = diag.findIndex(p => p.n === state.current);
+    state.current = diag[(idx + 1) % diag.length]?.n || diag[0].n;
   } else if (mode === "review") {
     const weak = weakProblems();
     if (weak.length) {
